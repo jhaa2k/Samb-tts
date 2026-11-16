@@ -6,32 +6,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -43,38 +23,27 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 private enum class EngineMode { ONLINE, OFFLINE }
-private data class VoiceProfile(
-    val name: String,
-    val style: String,
-    val tone: String,
-    val mode: EngineMode,
-    val voiceId: String = "",
-    val speakerId: Int = 0
-)
+private enum class AppScreen(val label: String) { STUDIO("Studio"), VOICES("Voices"), OFFLINE("Offline"), SETTINGS("Settings") }
+private data class VoiceProfile(val name: String, val style: String, val mode: EngineMode, val voiceId: String = "", val speakerId: Int = 0)
 
-private val voiceProfiles = listOf(
-    VoiceProfile("Alloy", "Balanced and versatile", "OpenAI voice", EngineMode.ONLINE, "alloy"),
-    VoiceProfile("Ash", "Clear conversational", "OpenAI voice", EngineMode.ONLINE, "ash"),
-    VoiceProfile("Ballad", "Expressive narration", "OpenAI voice", EngineMode.ONLINE, "ballad"),
-    VoiceProfile("Coral", "Warm and friendly", "OpenAI voice", EngineMode.ONLINE, "coral"),
-    VoiceProfile("Echo", "Smooth delivery", "OpenAI voice", EngineMode.ONLINE, "echo"),
-    VoiceProfile("Fable", "Storytelling", "OpenAI voice", EngineMode.ONLINE, "fable"),
-    VoiceProfile("Nova", "Bright and lively", "OpenAI voice", EngineMode.ONLINE, "nova"),
-    VoiceProfile("Onyx", "Deep narration", "OpenAI voice", EngineMode.ONLINE, "onyx"),
-    VoiceProfile("Sage", "Measured and calm", "OpenAI voice", EngineMode.ONLINE, "sage"),
-    VoiceProfile("Shimmer", "Soft and clear", "OpenAI voice", EngineMode.ONLINE, "shimmer"),
-    VoiceProfile("Verse", "Expressive", "OpenAI voice", EngineMode.ONLINE, "verse"),
-    VoiceProfile("Marin", "Natural studio voice", "OpenAI voice", EngineMode.ONLINE, "marin"),
-    VoiceProfile("Cedar", "Natural studio voice", "OpenAI voice", EngineMode.ONLINE, "cedar"),
-    VoiceProfile("Expr 2 Male", "English neural voice", "Offline · Male", EngineMode.OFFLINE, speakerId = 0),
-    VoiceProfile("Expr 2 Female", "English neural voice", "Offline · Female", EngineMode.OFFLINE, speakerId = 1),
-    VoiceProfile("Expr 3 Male", "English neural voice", "Offline · Male", EngineMode.OFFLINE, speakerId = 2),
-    VoiceProfile("Expr 3 Female", "English neural voice", "Offline · Female", EngineMode.OFFLINE, speakerId = 3),
-    VoiceProfile("Expr 4 Male", "English neural voice", "Offline · Male", EngineMode.OFFLINE, speakerId = 4),
-    VoiceProfile("Expr 4 Female", "English neural voice", "Offline · Female", EngineMode.OFFLINE, speakerId = 5),
-    VoiceProfile("Expr 5 Male", "English neural voice", "Offline · Male", EngineMode.OFFLINE, speakerId = 6),
-    VoiceProfile("Expr 5 Female", "English neural voice", "Offline · Female", EngineMode.OFFLINE, speakerId = 7)
+private val onlineVoices = listOf(
+    VoiceProfile("Alloy", "Balanced · versatile", EngineMode.ONLINE, "alloy"),
+    VoiceProfile("Ash", "Clear · conversational", EngineMode.ONLINE, "ash"),
+    VoiceProfile("Ballad", "Expressive · narration", EngineMode.ONLINE, "ballad"),
+    VoiceProfile("Coral", "Warm · friendly", EngineMode.ONLINE, "coral"),
+    VoiceProfile("Echo", "Smooth · measured", EngineMode.ONLINE, "echo"),
+    VoiceProfile("Fable", "Storytelling", EngineMode.ONLINE, "fable"),
+    VoiceProfile("Nova", "Bright · lively", EngineMode.ONLINE, "nova"),
+    VoiceProfile("Onyx", "Deep · narration", EngineMode.ONLINE, "onyx"),
+    VoiceProfile("Sage", "Calm · measured", EngineMode.ONLINE, "sage"),
+    VoiceProfile("Shimmer", "Soft · clear", EngineMode.ONLINE, "shimmer"),
+    VoiceProfile("Verse", "Expressive", EngineMode.ONLINE, "verse"),
+    VoiceProfile("Marin", "Natural · studio", EngineMode.ONLINE, "marin"),
+    VoiceProfile("Cedar", "Natural · studio", EngineMode.ONLINE, "cedar")
 )
+private val offlineVoices = (0..7).map { id ->
+    VoiceProfile("Speaker ${id + 1}", "Kitten Nano · English speaker", EngineMode.OFFLINE, speakerId = id)
+}
 
 class MainActivity : ComponentActivity() {
     private var sharedText by mutableStateOf("")
@@ -87,19 +56,19 @@ class MainActivity : ComponentActivity() {
         offlineEngine = OfflineKittenEngine(this)
 
         setContent {
+            var screen by remember { mutableStateOf(AppScreen.STUDIO) }
             var input by remember { mutableStateOf(sharedText) }
-            LaunchedEffect(sharedText) { if (sharedText.isNotBlank()) input = sharedText }
-            var engineMode by remember { mutableStateOf(EngineMode.ONLINE) }
-            var selectedVoice by remember { mutableStateOf("coral") }
             var provider by remember { mutableStateOf("openai") }
+            var selectedVoice by remember { mutableStateOf("coral") }
             var elevenVoiceId by remember { mutableStateOf("") }
             var serverUrl by remember { mutableStateOf("") }
-            var notice by remember { mutableStateOf("Online provider needs a hosted engine URL and server API key.") }
-            var showInfo by remember { mutableStateOf(false) }
+            var notice by remember { mutableStateOf("Ready") }
             var offlineInstalled by remember { mutableStateOf(offlineEngine.isInstalled()) }
             var installing by remember { mutableStateOf(false) }
 
-            val colors = darkColorScheme(
+            LaunchedEffect(sharedText) { if (sharedText.isNotBlank()) input = sharedText }
+
+            val scheme = darkColorScheme(
                 primary = Color(0xFFB8F36B),
                 onPrimary = Color(0xFF17210B),
                 secondary = Color(0xFF9CA6B5),
@@ -110,133 +79,115 @@ class MainActivity : ComponentActivity() {
                 onSurfaceVariant = Color(0xFFADB5C0)
             )
 
-            MaterialTheme(colorScheme = colors) {
-                Surface(modifier = Modifier.fillMaxSize(), color = colors.background) {
+            MaterialTheme(colorScheme = scheme) {
+                Scaffold(
+                    containerColor = scheme.background,
+                    bottomBar = {
+                        NavigationBar(containerColor = Color(0xFF11151A), tonalElevation = 0.dp) {
+                            AppScreen.entries.forEach { item ->
+                                NavigationBarItem(
+                                    selected = screen == item,
+                                    onClick = { screen = item },
+                                    icon = { Text(when (item) { AppScreen.STUDIO -> "01"; AppScreen.VOICES -> "02"; AppScreen.OFFLINE -> "03"; AppScreen.SETTINGS -> "04" }, fontSize = 10.sp, fontWeight = FontWeight.Bold) },
+                                    label = { Text(item.label, fontSize = 11.sp) },
+                                    alwaysShowLabel = true
+                                )
+                            }
+                        }
+                    }
+                ) { inset ->
                     Column(
-                        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 20.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        Modifier.fillMaxSize().padding(inset).padding(horizontal = 16.dp, vertical = 12.dp)
                     ) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Column {
-                                Text("SAMBALPURI VOICE", color = colors.primary, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                                Text("Voice Studio", color = colors.onSurface, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                                Text("SAMBALPURI VOICE", color = scheme.primary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp)
+                                Text(screen.label, color = scheme.onSurface, fontSize = 25.sp, fontWeight = FontWeight.Bold)
                             }
-                            OutlinedButton(onClick = { showInfo = true }) { Text("About") }
+                            Text("VOICE STUDIO", color = scheme.onSurfaceVariant, fontSize = 10.sp, modifier = Modifier.padding(top = 12.dp))
                         }
+                        Spacer(Modifier.height(12.dp))
 
-                        Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF18221A)), border = BorderStroke(1.dp, Color(0xFF34472A))) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("YOUR VOICE WORKSPACE", color = colors.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
-                                Text("Write naturally. Choose a voice. Make it yours.", color = colors.onSurface, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                                Text("Cloud AI voices plus a downloadable on-device neural English engine. No Android system TTS.", color = colors.onSurfaceVariant, fontSize = 13.sp)
-                            }
-                        }
+                        Column(
+                            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            when (screen) {
+                                AppScreen.STUDIO -> {
+                                    InfoCard("CREATE SPEECH", "Write or paste text, select a voice in Voices, then generate. Shared text from other apps appears here.")
+                                    OutlinedTextField(
+                                        value = input, onValueChange = { input = it },
+                                        modifier = Modifier.fillMaxWidth().heightIn(min = 170.dp),
+                                        label = { Text("Text to speech") },
+                                        placeholder = { Text("Type English, Odia or Sambalpuri text…") },
+                                        minLines = 5
+                                    )
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedButton(onClick = { input = "" }, modifier = Modifier.weight(1f)) { Text("Clear") }
+                                        OutlinedButton(onClick = { screen = AppScreen.VOICES }, modifier = Modifier.weight(1f)) { Text("Choose voice") }
+                                    }
+                                    Text("ENGINE", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        ModeButton("ONLINE AI", provider != "offline", Modifier.weight(1f)) { provider = "openai"; if (selectedVoice !in onlineVoices.map { it.voiceId }) selectedVoice = "coral" }
+                                        ModeButton("OFFLINE AI", provider == "offline", Modifier.weight(1f)) { provider = "offline"; selectedVoice = offlineVoices.first().name }
+                                    }
+                                    Button(
+                                        onClick = {
+                                            if (input.isBlank()) notice = "Enter some text first."
+                                            else if (provider == "offline") {
+                                                val voice = offlineVoices.firstOrNull { it.name == selectedVoice } ?: offlineVoices.first()
+                                                if (!offlineInstalled) notice = "Install the offline voice pack from Offline screen."
+                                                else offlineEngine.speak(input, voice.speakerId) { s -> runOnUiThread { notice = s } }
+                                            } else {
+                                                val voice = if (provider == "elevenlabs") elevenVoiceId.trim() else selectedVoice
+                                                if (voice.isBlank()) notice = "Enter an ElevenLabs voice ID in Voices."
+                                                else speakOnline(input, provider, voice, serverUrl) { s -> runOnUiThread { notice = s } }
+                                            }
+                                        },
+                                        enabled = input.isNotBlank(),
+                                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = scheme.primary, contentColor = scheme.onPrimary)
+                                    ) { Text("GENERATE SPEECH", fontWeight = FontWeight.Bold) }
+                                    OutlinedButton(onClick = { stopPlayback(); notice = "Playback stopped." }, modifier = Modifier.fillMaxWidth()) { Text("STOP PLAYBACK") }
+                                    StatusCard(notice)
+                                }
 
-                        SectionTitle("01  TEXT INPUT")
-                        OutlinedTextField(
-                            value = input,
-                            onValueChange = { input = it },
-                            modifier = Modifier.fillMaxWidth().height(180.dp),
-                            label = { Text("Your text") },
-                            placeholder = { Text("Type or paste English, Odia or Sambalpuri…") },
-                            minLines = 5
-                        )
-                        OutlinedButton(onClick = { input = "" }, modifier = Modifier.fillMaxWidth()) { Text("Clear text") }
-
-                        SectionTitle("02  SPEECH ENGINE")
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ModeButton("ONLINE AI", engineMode == EngineMode.ONLINE, Modifier.weight(1f)) { engineMode = EngineMode.ONLINE }
-                            ModeButton("OFFLINE AI", engineMode == EngineMode.OFFLINE, Modifier.weight(1f)) { engineMode = EngineMode.OFFLINE }
-                        }
-
-                        if (engineMode == EngineMode.ONLINE) {
-                            Card(colors = CardDefaults.cardColors(containerColor = colors.surface), border = BorderStroke(1.dp, colors.surfaceVariant)) {
-                                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text("ONLINE PROVIDER", color = colors.primary, fontWeight = FontWeight.Bold)
+                                AppScreen.VOICES -> {
+                                    InfoCard("ONLINE VOICE LIBRARY", "Choose an OpenAI voice or enter a voice ID from your ElevenLabs account. Samples require a configured server.")
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         ModeButton("OpenAI", provider == "openai", Modifier.weight(1f)) { provider = "openai" }
                                         ModeButton("ElevenLabs", provider == "elevenlabs", Modifier.weight(1f)) { provider = "elevenlabs" }
                                     }
-                                    OutlinedTextField(
-                                        value = serverUrl,
-                                        onValueChange = { serverUrl = it },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        label = { Text("Your hosted engine URL") },
-                                        placeholder = { Text("https://your-engine.example.com") },
-                                        singleLine = true
-                                    )
-                                    if (provider == "elevenlabs") {
-                                        OutlinedTextField(
-                                            value = elevenVoiceId,
-                                            onValueChange = { elevenVoiceId = it },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            label = { Text("ElevenLabs voice ID") },
-                                            singleLine = true
-                                        )
-                                    }
-                                    Text("API keys must be configured on your server. Never paste secret keys into this app or commit them to GitHub.", color = colors.onSurfaceVariant, fontSize = 12.sp)
-                                }
-                            }
-                            SectionTitle("03  ONLINE VOICE LIBRARY")
-                            Text("13 OpenAI voice IDs are available through the configured backend. ElevenLabs uses a voice ID from your account.", color = colors.onSurfaceVariant, fontSize = 13.sp)
-                            if (provider == "openai") {
-                                voiceProfiles.filter { it.mode == EngineMode.ONLINE }.forEach { profile ->
-                                    val selected = selectedVoice == profile.voiceId
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        onClick = { selectedVoice = profile.voiceId },
-                                        colors = CardDefaults.cardColors(containerColor = if (selected) Color(0xFF202A1A) else colors.surface),
-                                        border = BorderStroke(1.dp, if (selected) colors.primary else colors.surfaceVariant)
-                                    ) {
-                                        Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                                Text(profile.name, color = colors.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                                                Text(profile.style, color = colors.onSurfaceVariant, fontSize = 13.sp)
+                                    if (provider == "openai") {
+                                        onlineVoices.forEach { voice ->
+                                            VoiceRow(voice.name, voice.style, selectedVoice == voice.voiceId, "Preview") {
+                                                selectedVoice = voice.voiceId
+                                                speakOnline("Hello! This is a short preview of the selected AI voice.", "openai", voice.voiceId, serverUrl) { s -> runOnUiThread { notice = s } }
                                             }
-                                            OutlinedButton(onClick = {
-                                                selectedVoice = profile.voiceId
-                                                speakOnline(
-                                                    "Hello! This is a short preview of the selected AI voice.",
-                                                    "openai", profile.voiceId, serverUrl.trim()
-                                                ) { status -> runOnUiThread { notice = status } }
-                                            }) { Text("Preview") }
                                         }
+                                    } else {
+                                        OutlinedTextField(value = elevenVoiceId, onValueChange = { elevenVoiceId = it }, modifier = Modifier.fillMaxWidth(), label = { Text("ElevenLabs voice ID") }, singleLine = true)
+                                        Button(onClick = {
+                                            if (elevenVoiceId.isBlank()) notice = "Enter a voice ID first."
+                                            else speakOnline("Hello! This is your selected ElevenLabs voice.", "elevenlabs", elevenVoiceId.trim(), serverUrl) { s -> runOnUiThread { notice = s } }
+                                        }, modifier = Modifier.fillMaxWidth(), enabled = elevenVoiceId.isNotBlank()) { Text("PREVIEW VOICE") }
                                     }
+                                    StatusCard(notice)
                                 }
-                            } else {
-                                Card(colors = CardDefaults.cardColors(containerColor = colors.surface), border = BorderStroke(1.dp, colors.surfaceVariant)) {
-                                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text("YOUR ELEVENLABS VOICE", color = colors.onSurface, fontWeight = FontWeight.SemiBold)
-                                        Text(if (elevenVoiceId.isBlank()) "Enter a voice ID above to preview it." else "Voice ID: $elevenVoiceId", color = colors.onSurfaceVariant, fontSize = 12.sp)
-                                        OutlinedButton(
-                                            onClick = {
-                                                if (elevenVoiceId.isBlank()) notice = "Enter an ElevenLabs voice ID first."
-                                                else speakOnline(
-                                                    "Hello! This is a short preview of your selected ElevenLabs voice.",
-                                                    "elevenlabs", elevenVoiceId.trim(), serverUrl.trim()
-                                                ) { status -> runOnUiThread { notice = status } }
-                                            },
-                                            enabled = elevenVoiceId.isNotBlank()
-                                        ) { Text("Preview voice sample") }
-                                    }
-                                }
-                            }
-                        } else {
-                            Card(colors = CardDefaults.cardColors(containerColor = colors.surface), border = BorderStroke(1.dp, colors.surfaceVariant)) {
-                                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text("SHERPA-ONNX OFFLINE ENGINE", color = colors.primary, fontWeight = FontWeight.Bold)
-                                    Text("Kitten Nano English neural model • 8 distinct speakers • Runs locally after model download.", color = colors.onSurfaceVariant, fontSize = 13.sp)
-                                    Text(if (offlineInstalled) "Installed • 8 offline voices ready" else "Not installed • Download required", color = if (offlineInstalled) colors.primary else Color(0xFFFFC56D), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+
+                                AppScreen.OFFLINE -> {
+                                    InfoCard("ON-DEVICE NEURAL ENGINE", "Sherpa-ONNX · Kitten Nano · English only. The model downloads once and runs locally. It is not Android System TTS.")
+                                    StatusCard(if (offlineInstalled) "Voice pack installed · offline ready" else "Voice pack not installed")
                                     Button(
                                         onClick = {
                                             if (!installing && !offlineInstalled) {
                                                 installing = true
                                                 Thread {
-                                                    offlineEngine.install { status ->
+                                                    offlineEngine.install { s ->
                                                         runOnUiThread {
-                                                            notice = status
+                                                            notice = s
                                                             offlineInstalled = offlineEngine.isInstalled()
-                                                            if (offlineInstalled || status.startsWith("Offline model install failed")) installing = false
+                                                            if (offlineInstalled || s.startsWith("Offline model install failed")) installing = false
                                                         }
                                                     }
                                                 }.start()
@@ -244,143 +195,83 @@ class MainActivity : ComponentActivity() {
                                         },
                                         enabled = !installing && !offlineInstalled,
                                         modifier = Modifier.fillMaxWidth()
-                                    ) { Text(if (installing) "INSTALLING VOICE PACK…" else if (offlineInstalled) "VOICE PACK INSTALLED" else "DOWNLOAD OFFLINE VOICE PACK") }
-                                }
-                            }
-                            SectionTitle("03  OFFLINE VOICE LIBRARY")
-                            Text("Eight English speakers from one downloaded neural model. This pack does not speak Sambalpuri or Odia.", color = colors.onSurfaceVariant, fontSize = 13.sp)
-                            voiceProfiles.filter { it.mode == EngineMode.OFFLINE }.forEach { profile ->
-                                val selected = selectedVoice == profile.name
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    onClick = { selectedVoice = profile.name },
-                                    colors = CardDefaults.cardColors(containerColor = if (selected) Color(0xFF202A1A) else colors.surface),
-                                    border = BorderStroke(1.dp, if (selected) colors.primary else colors.surfaceVariant)
-                                ) {
-                                    Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                            Text(profile.name, color = colors.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                                            Text(profile.style, color = colors.onSurfaceVariant, fontSize = 12.sp)
-                                            Text(profile.tone, color = colors.primary, fontSize = 11.sp)
+                                    ) { Text(if (installing) "DOWNLOADING MODEL…" else if (offlineInstalled) "VOICE PACK INSTALLED" else "DOWNLOAD OFFLINE VOICE PACK") }
+                                    Text("OFFLINE SPEAKERS", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                                    offlineVoices.forEach { voice ->
+                                        VoiceRow(voice.name, voice.style, selectedVoice == voice.name, "Preview") {
+                                            provider = "offline"
+                                            selectedVoice = voice.name
+                                            if (offlineInstalled) offlineEngine.speak("Hello! This is an offline voice sample.", voice.speakerId) { s -> runOnUiThread { notice = s } }
+                                            else notice = "Download the voice pack first."
                                         }
-                                        OutlinedButton(
-                                            onClick = {
-                                                if (offlineInstalled) offlineEngine.speak(
-                                                    "Hello! This is a sample of the selected offline neural voice.",
-                                                    profile.speakerId
-                                                ) { status -> runOnUiThread { notice = status } }
-                                                else notice = "Download the offline voice pack first."
-                                            },
-                                            enabled = offlineInstalled
-                                        ) { Text("Preview") }
                                     }
+                                    Text("Language note: these are English speaker IDs, not native Sambalpuri or Odia voices.", color = scheme.onSurfaceVariant, fontSize = 12.sp)
+                                    StatusCard(notice)
+                                }
+
+                                AppScreen.SETTINGS -> {
+                                    InfoCard("CONNECTION", "Your API keys stay on the hosted server. Do not paste secret keys into this app or commit them to GitHub.")
+                                    OutlinedTextField(
+                                        value = serverUrl, onValueChange = { serverUrl = it.trim() },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        label = { Text("Hosted engine HTTPS URL") },
+                                        placeholder = { Text("https://your-engine.example.com") },
+                                        singleLine = true
+                                    )
+                                    Text("Online providers: OpenAI and ElevenLabs. Configure OPENAI_API_KEY and ELEVENLABS_API_KEY on your server.", color = scheme.onSurfaceVariant, fontSize = 12.sp)
+                                    Divider(color = scheme.surfaceVariant)
+                                    Text("ABOUT", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                                    Text("Sambalpuri Voice · 0.2.0", color = scheme.onSurface, fontWeight = FontWeight.SemiBold)
+                                    Text("No Android System TTS fallback. Offline Kitten Nano is English-only. Native Sambalpuri speech needs a dedicated trained model.", color = scheme.onSurfaceVariant, fontSize = 12.sp)
+                                    OutlinedButton(onClick = { stopPlayback(); notice = "Playback stopped." }, modifier = Modifier.fillMaxWidth()) { Text("STOP ALL PLAYBACK") }
+                                    StatusCard(notice)
                                 }
                             }
                         }
-
-                        SectionTitle("04  GENERATION")
-                        Button(
-                            onClick = {
-                                if (engineMode == EngineMode.OFFLINE) {
-                                    val profile = voiceProfiles.firstOrNull { it.mode == EngineMode.OFFLINE && it.name == selectedVoice }
-                                    if (profile == null) notice = "Select an offline voice first."
-                                    else offlineEngine.speak(input, profile.speakerId) { status -> runOnUiThread { notice = status } }
-                                } else {
-                                    val voice = if (provider == "openai") selectedVoice else elevenVoiceId.trim()
-                                    if (voice.isBlank()) notice = "Enter a valid ElevenLabs voice ID."
-                                    else speakOnline(input, provider, voice, serverUrl.trim()) { status -> runOnUiThread { notice = status } }
-                                }
-                            },
-                            enabled = input.isNotBlank() && (engineMode == EngineMode.ONLINE || offlineInstalled),
-                            modifier = Modifier.fillMaxWidth().height(54.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = colors.primary, contentColor = colors.onPrimary)
-                        ) { Text("GENERATE SPEECH", fontWeight = FontWeight.Bold) }
-                        OutlinedButton(
-                            onClick = {
-                                onlinePlayer?.stop()
-                                onlinePlayer?.release()
-                                onlinePlayer = null
-                                notice = "Playback stopped."
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text("STOP PLAYBACK") }
-                        Text(notice, color = colors.onSurfaceVariant, fontSize = 12.sp)
-                        Text("SHARE TEXT", color = colors.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                        Text("Use Share → Sambalpuri Voice from Instagram or another app to load selected text here.", color = colors.onSurfaceVariant, fontSize = 13.sp)
-                        Spacer(Modifier.height(12.dp))
-                        Text("SAMBALPURI VOICE  •  VOICE STUDIO", color = colors.onSurfaceVariant, fontSize = 10.sp, letterSpacing = 1.sp)
                     }
                 }
             }
-
-            if (showInfo) {
-                AlertDialog(
-                    onDismissRequest = { showInfo = false },
-                    title = { Text("About Voice Studio") },
-                    text = { Text("Offline mode uses Sherpa-ONNX with an English-only Kitten Nano model (8 speakers). Online mode connects to your hosted FastAPI gateway, which requires your own OpenAI or ElevenLabs server API key. No Android system TTS is used. Native Sambalpuri speech still needs a dedicated trained model.") },
-                    confirmButton = { Button(onClick = { showInfo = false }) { Text("Got it") } }
-                )
-            }
         }
+    }
+
+    private fun stopPlayback() {
+        onlinePlayer?.let { runCatching { it.stop() }; it.release() }
+        onlinePlayer = null
     }
 
     private fun speakOnline(text: String, provider: String, voice: String, baseUrl: String, onStatus: (String) -> Unit) {
         Thread {
             try {
-                if (baseUrl.isBlank()) {
-                    onStatus("Add your deployed engine URL first. Online provider keys are configured on that server.")
-                    return@Thread
-                }
+                if (baseUrl.isBlank()) { onStatus("Set your hosted engine URL in Settings first."); return@Thread }
                 onStatus("Connecting to $provider…")
-                val endpoint = baseUrl.trimEnd('/') + "/v1/synthesize"
-                val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+                val connection = (URL(baseUrl.trim().trimEnd('/') + "/v1/synthesize").openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     connectTimeout = 20000
                     readTimeout = 120000
                     doOutput = true
                     setRequestProperty("Content-Type", "application/json")
                 }
-                val payload = JSONObject()
-                    .put("text", text)
-                    .put("provider", provider)
-                    .put("voice", voice)
-                    .put("speed", 1.0)
-                    .put("style", "Speak naturally and clearly.")
-                    .toString()
+                val payload = JSONObject().put("text", text).put("provider", provider).put("voice", voice).put("speed", 1.0).put("style", "Speak naturally and clearly.").toString()
                 connection.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
                 val code = connection.responseCode
                 if (code !in 200..299) {
                     val error = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
-                    throw IllegalStateException("Engine HTTP $code: ${error.take(240)}")
+                    throw IllegalStateException("Engine HTTP $code: ${error.take(200)}")
                 }
                 val audioFile = File(cacheDir, "voice-output.mp3")
                 connection.inputStream.use { input -> audioFile.outputStream().use { output -> input.copyTo(output) } }
                 connection.disconnect()
                 runOnUiThread {
-                    onlinePlayer?.release()
+                    stopPlayback()
                     onlinePlayer = MediaPlayer().apply {
                         setDataSource(audioFile.absolutePath)
-                        setOnPreparedListener {
-                            it.start()
-                            onStatus("Playing online $provider voice: $voice")
-                        }
-                        setOnCompletionListener {
-                            it.release()
-                            onlinePlayer = null
-                            onStatus("Online speech finished.")
-                        }
-                        setOnErrorListener { player, _, _ ->
-                            player.release()
-                            onlinePlayer = null
-                            onStatus("Could not play the generated audio.")
-                            true
-                        }
+                        setOnPreparedListener { it.start(); onStatus("Playing $provider · $voice") }
+                        setOnCompletionListener { it.release(); onlinePlayer = null; onStatus("Speech finished.") }
+                        setOnErrorListener { player, _, _ -> player.release(); onlinePlayer = null; onStatus("Audio playback failed."); true }
                         prepareAsync()
                     }
                 }
-            } catch (error: Exception) {
-                onStatus("Online speech failed: ${error.message ?: "check server URL, provider key and network"}")
-            }
+            } catch (e: Exception) { onStatus("Online speech failed: ${e.message ?: "check URL, API key and network"}") }
         }.start()
     }
 
@@ -397,22 +288,48 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        onlinePlayer?.release()
-        onlinePlayer = null
+        stopPlayback()
         super.onDestroy()
     }
 }
 
-@androidx.compose.runtime.Composable
-private fun SectionTitle(value: String) {
-    Text(value, color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+@Composable
+private fun InfoCard(title: String, body: String) {
+    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF18221A)), border = BorderStroke(1.dp, Color(0xFF34472A))) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text(title, color = Color(0xFFB8F36B), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+            Text(body, color = Color(0xFFF1F3F5), fontSize = 13.sp)
+        }
+    }
 }
 
-@androidx.compose.runtime.Composable
-private fun ModeButton(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    if (selected) {
-        Button(onClick = onClick, modifier = modifier) { Text(label) }
-    } else {
-        OutlinedButton(onClick = onClick, modifier = modifier) { Text(label) }
+@Composable
+private fun StatusCard(value: String) {
+    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF171D23))) {
+        Text(value, Modifier.fillMaxWidth().padding(12.dp), color = Color(0xFFADB5C0), fontSize = 12.sp)
     }
+}
+
+@Composable
+private fun VoiceRow(name: String, detail: String, selected: Boolean, actionLabel: String, onAction: () -> Unit) {
+    val accent = MaterialTheme.colorScheme.primary
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable { onAction() },
+        colors = CardDefaults.cardColors(containerColor = if (selected) Color(0xFF202A1A) else MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, if (selected) accent else MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(name, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text(detail, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+            }
+            TextButton(onClick = onAction, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) { Text(actionLabel, fontSize = 11.sp) }
+        }
+    }
+}
+
+@Composable
+private fun ModeButton(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    if (selected) Button(onClick = onClick, modifier = modifier, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 9.dp)) { Text(label, fontSize = 11.sp) }
+    else OutlinedButton(onClick = onClick, modifier = modifier, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 9.dp)) { Text(label, fontSize = 11.sp) }
 }
