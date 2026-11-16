@@ -50,8 +50,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             LaunchedEffect(sharedText) {
                 if (sharedText.isNotBlank()) {
                     input = sharedText
-                    mode = if (sharedText.any { it.code in 0x0B00..0x0B7F }) ReadingMode.SAMBALPURI_TEXT
-                    else ReadingMode.ENGLISH_SOUND
+                    mode = ReadingMode.SAMBALPURI_TEXT
                     pronunciation = EnglishSoundGuide.convert(sharedText)
                 }
             }
