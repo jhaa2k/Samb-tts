@@ -1,43 +1,66 @@
 # Sambalpuri Voice
 
-An Android-first Sambalpuri text-to-speech project.
+An Android-first AI text-to-speech studio with online provider adapters and an offline neural English voice pack.
 
-## Current status
+## Implemented modules
 
-This repository is an early working prototype:
-- Android app written in Kotlin + Jetpack Compose.
-- Reader screen with Sambalpuri text and English-to-Sambalpuri-style sound modes.\n- Editable pronunciation preview for English text.\n- Android Share target: send selected plain text from another app to Sambalpuri Voice.\n- Speak and stop controls.
-- GitHub Actions workflow to build a debug APK.
-- Python FastAPI voice-engine service scaffold.
+### Android
+- Kotlin + Jetpack Compose Voice Studio.
+- No Android system TextToSpeech dependency or fallback.
+- Text input and Android Share target for text received from other apps.
+- Online mode UI for OpenAI and ElevenLabs through the project's hosted API gateway.
+- Offline mode powered by Sherpa-ONNX.
+- Downloadable Kitten Nano English model with eight selectable speaker IDs and sample playback.
+- MP3 playback for online generated speech.
 
-**Important:** A genuinely natural Sambalpuri voice requires a dedicated, properly licensed Sambalpuri speech dataset and a trained/adapted TTS model. The current Android reader can only use an Odia system voice if the device has one installed; that is a temporary fallback, not perfect Sambalpuri pronunciation. The Python API deliberately reports that the model is not configured instead of pretending to generate audio.
+### Online engine
+The FastAPI gateway supports:
+- OpenAI speech synthesis with 13 documented built-in voice IDs.
+- ElevenLabs account voice listing and synthesis.
+- Server-side API keys only.
+- MP3 response playback in the Android app.
+
+The online service is not automatically hosted. Deploy the included `render.yaml` blueprint, set provider keys as secret environment variables, then paste the service HTTPS URL into the app. Provider use can incur charges.
+
+### Offline engine
+- Sherpa-ONNX 2.0.1 Android runtime is downloaded and checksum-verified by GitHub Actions.
+- Kitten Nano English voice pack is downloaded from the official Sherpa-ONNX model release when the user taps **Download Offline Voice Pack**.
+- Eight English speakers are available after the pack is installed.
+- Model files are downloaded separately and are not bundled into the APK.
+
+**Language limitation:** The installed offline Kitten model is English-only. The online providers also do not guarantee native Sambalpuri pronunciation. This repository does not yet contain a trained Sambalpuri or Odia voice model. Do not label the English model as Sambalpuri.
+
+## Online engine setup
+
+See [engine/README.md](engine/README.md). Provider credentials must be configured on the server:
+- `OPENAI_API_KEY`
+- `ELEVENLABS_API_KEY`
+
+Never commit real keys to this repository or embed them in the Android APK.
 
 ## Build APK
 
 1. Open the **Actions** tab.
 2. Select **Build Android APK**.
-3. Run the workflow (or push a commit).
-4. Download the `app-debug` artifact from the completed run.
+3. Wait for the build to complete successfully.
+4. Download the `sambalpuri-voice-debug` artifact.
+
+The workflow downloads the official Sherpa-ONNX AAR, verifies its SHA-256 checksum, then builds the Android APK.
 
 ## Project layout
 
-- `app/` — Android application.
-- `engine/` — Python API scaffold and voice-data preparation notes.
+- `app/` — Android application and offline TTS runtime integration.
+- `engine/` — FastAPI gateway for online providers.
+- `render.yaml` — hosted API service blueprint.
 - `.github/workflows/` — Android CI build.
 
-## Voice-model roadmap
+## Native Sambalpuri voice roadmap
 
-1. Collect consented, clean recordings from native Sambalpuri speakers.
-2. Prepare matching transcripts in a consistent script and spelling convention.
-3. Build a pronunciation lexicon for regional words and variants.
-4. Train or adapt a multilingual neural TTS model.
-5. Evaluate with native speakers across Western Odisha accents.
-6. Export an optimized model for server inference first, then investigate on-device ONNX deployment.
+A genuine native Sambalpuri model still requires:
+1. Consented recordings from native Sambalpuri speakers.
+2. Accurate aligned transcripts covering regional vocabulary and conversational speech.
+3. A pronunciation lexicon and phoneme/grapheme-to-phoneme rules.
+4. Model training or adaptation and a properly documented licence.
+5. Evaluation by native speakers across Western Odisha dialects.
 
-Do not upload recordings without the speaker's informed permission. Keep speaker identity and licensing information with every dataset release.
-
-## Development
-
-Android: Kotlin, Jetpack Compose, Android TextToSpeech (temporary device-voice fallback).
-
-Engine: Python, FastAPI. See [engine/README.md](engine/README.md).
+Never use a person's voice recordings for cloning without explicit informed consent.
