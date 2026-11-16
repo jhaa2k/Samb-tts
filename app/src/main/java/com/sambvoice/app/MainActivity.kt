@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -25,6 +24,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         tts = TextToSpeech(this, this)
 
         setContent {
-            var input by mutableStateOf("ମୁଇଁ ସମ୍ବଲପୁରୀ ଭାଷାରେ କଥା ହେମି।")
+            var input by remember { mutableStateOf("ମୁଇଁ ସମ୍ବଲପୁରୀ ଭାଷାରେ କଥା ହେମି।") }
             MaterialTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
