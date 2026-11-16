@@ -4,9 +4,9 @@ An Android-first Sambalpuri text-to-speech project.
 
 ## Current status
 
-This repository is the clean project foundation:
+This repository is an early working prototype:
 - Android app written in Kotlin + Jetpack Compose.
-- Reader screen with text input, speak, and stop controls.
+- Reader screen with Sambalpuri text and English-to-Sambalpuri-style sound modes.\n- Editable pronunciation preview for English text.\n- Android Share target: send selected plain text from another app to Sambalpuri Voice.\n- Speak and stop controls.
 - GitHub Actions workflow to build a debug APK.
 - Python FastAPI voice-engine service scaffold.
 
