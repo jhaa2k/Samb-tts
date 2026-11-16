@@ -179,20 +179,45 @@ class MainActivity : ComponentActivity() {
                             }
                             SectionTitle("03  ONLINE VOICE LIBRARY")
                             Text("13 OpenAI voice IDs are available through the configured backend. ElevenLabs uses a voice ID from your account.", color = colors.onSurfaceVariant, fontSize = 13.sp)
-                            voiceProfiles.filter { it.mode == EngineMode.ONLINE }.forEach { profile ->
-                                val selected = selectedVoice == profile.voiceId
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    onClick = { selectedVoice = profile.voiceId },
-                                    colors = CardDefaults.cardColors(containerColor = if (selected) Color(0xFF202A1A) else colors.surface),
-                                    border = BorderStroke(1.dp, if (selected) colors.primary else colors.surfaceVariant)
-                                ) {
-                                    Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                            Text(profile.name, color = colors.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                                            Text(profile.style, color = colors.onSurfaceVariant, fontSize = 13.sp)
+                            if (provider == "openai") {
+                                voiceProfiles.filter { it.mode == EngineMode.ONLINE }.forEach { profile ->
+                                    val selected = selectedVoice == profile.voiceId
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        onClick = { selectedVoice = profile.voiceId },
+                                        colors = CardDefaults.cardColors(containerColor = if (selected) Color(0xFF202A1A) else colors.surface),
+                                        border = BorderStroke(1.dp, if (selected) colors.primary else colors.surfaceVariant)
+                                    ) {
+                                        Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                                Text(profile.name, color = colors.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                                                Text(profile.style, color = colors.onSurfaceVariant, fontSize = 13.sp)
+                                            }
+                                            OutlinedButton(onClick = {
+                                                selectedVoice = profile.voiceId
+                                                speakOnline(
+                                                    "Hello! This is a short preview of the selected AI voice.",
+                                                    "openai", profile.voiceId, serverUrl.trim()
+                                                ) { status -> runOnUiThread { notice = status } }
+                                            }) { Text("Preview") }
                                         }
-                                        Text(if (selected) "SELECTED" else "SELECT", color = if (selected) colors.primary else colors.onSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            } else {
+                                Card(colors = CardDefaults.cardColors(containerColor = colors.surface), border = BorderStroke(1.dp, colors.surfaceVariant)) {
+                                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text("YOUR ELEVENLABS VOICE", color = colors.onSurface, fontWeight = FontWeight.SemiBold)
+                                        Text(if (elevenVoiceId.isBlank()) "Enter a voice ID above to preview it." else "Voice ID: $elevenVoiceId", color = colors.onSurfaceVariant, fontSize = 12.sp)
+                                        OutlinedButton(
+                                            onClick = {
+                                                if (elevenVoiceId.isBlank()) notice = "Enter an ElevenLabs voice ID first."
+                                                else speakOnline(
+                                                    "Hello! This is a short preview of your selected ElevenLabs voice.",
+                                                    "elevenlabs", elevenVoiceId.trim(), serverUrl.trim()
+                                                ) { status -> runOnUiThread { notice = status } }
+                                            },
+                                            enabled = elevenVoiceId.isNotBlank()
+                                        ) { Text("Preview voice sample") }
                                     }
                                 }
                             }
