@@ -124,7 +124,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         OutlinedButton(onClick = { input = "" }, modifier = Modifier.weight(1f)) { Text("Clear") }
-                                        OutlinedButton(onClick = { screen = AppScreen.VOICES }, modifier = Modifier.weight(1f)) { Text("Choose voice") }
+                                        OutlinedButton(onClick = { if (provider == "offline") { provider = "openai"; selectedVoice = "coral" }; screen = AppScreen.VOICES }, modifier = Modifier.weight(1f)) { Text("Choose voice") }
                                     }
                                     Text("ENGINE", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
