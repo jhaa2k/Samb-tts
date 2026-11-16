@@ -27,6 +27,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,6 +70,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             var input by remember { mutableStateOf(sharedText) }
+            LaunchedEffect(sharedText) { if (sharedText.isNotBlank()) input = sharedText }
             var engineMode by remember { mutableStateOf(EngineMode.ONLINE) }
             var selectedVoice by remember { mutableStateOf("Aarav") }
             var notice by remember { mutableStateOf("Voice engines are not connected yet.") }
