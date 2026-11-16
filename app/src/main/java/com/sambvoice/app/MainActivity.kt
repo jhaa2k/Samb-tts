@@ -1,5 +1,6 @@
 package com.sambvoice.app
 
+import android.content.Intent
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.TextToSpeech.LANG_MISSING_DATA
@@ -30,17 +31,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 
+private enum class ReadingMode { SAMBALPURI_TEXT, ENGLISH_SOUND }
+
 class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
     private var voiceReady = false
-    private var voiceMessage by mutableStateOf("Checking available device voice…")
+    private var voiceMessage by mutableStateOf("Checking available Odia device voice…")
+    private var sharedText by mutableStateOf("")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        receiveSharedText(intent)
         tts = TextToSpeech(this, this)
 
         setContent {
-            var input by remember { mutableStateOf("ମୁଇଁ ସମ୍ବଲପୁରୀ ଭାଷାରେ କଥା ହେମି।") }
+            var input by remember { mutableStateOf(sharedText.ifBlank { "ମୁଇଁ ସମ୍ବଲପୁରୀ ଭାଷାରେ କଥା ହେମି।" }) }
+            var mode by remember { mutableStateOf(ReadingMode.SAMBALPURI_TEXT) }
+            var pronunciation by remember { mutableStateOf("") }
             MaterialTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -50,51 +57,102 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         modifier = Modifier
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState())
-                            .padding(22.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         Text("SAMBALPURI VOICE", style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary)
                         Text("Text Reader", style = MaterialTheme.typography.headlineLarge)
                         Text(
-                            "Paste or type Sambalpuri text and listen. Native Sambalpuri voice support is being developed.",
+                            "Read Sambalpuri text or prepare an English message for Sambalpuri-style pronunciation.",
                             style = MaterialTheme.typography.bodyMedium
                         )
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (mode == ReadingMode.SAMBALPURI_TEXT) {
+                                Button(onClick = { mode = ReadingMode.SAMBALPURI_TEXT; pronunciation = "" },
+                                    modifier = Modifier.weight(1f)) { Text("Sambalpuri") }
+                            } else {
+                                OutlinedButton(onClick = { mode = ReadingMode.SAMBALPURI_TEXT; pronunciation = "" },
+                                    modifier = Modifier.weight(1f)) { Text("Sambalpuri") }
+                            }
+                            if (mode == ReadingMode.ENGLISH_SOUND) {
+                                Button(onClick = { mode = ReadingMode.ENGLISH_SOUND; pronunciation = EnglishSoundGuide.convert(input) },
+                                    modifier = Modifier.weight(1f)) { Text("English → Sound") }
+                            } else {
+                                OutlinedButton(onClick = { mode = ReadingMode.ENGLISH_SOUND; pronunciation = EnglishSoundGuide.convert(input) },
+                                    modifier = Modifier.weight(1f)) { Text("English → Sound") }
+                            }
+                        }
+
                         OutlinedTextField(
                             value = input,
-                            onValueChange = { input = it },
-                            modifier = Modifier.fillMaxWidth().height(230.dp),
-                            label = { Text("Your text") },
-                            placeholder = { Text("ଏଠାରେ ଲେଖନ୍ତୁ…") },
-                            minLines = 6
+                            onValueChange = {
+                                input = it
+                                if (mode == ReadingMode.ENGLISH_SOUND) pronunciation = EnglishSoundGuide.convert(it)
+                            },
+                            modifier = Modifier.fillMaxWidth().height(190.dp),
+                            label = { Text(if (mode == ReadingMode.ENGLISH_SOUND) "English message" else "Sambalpuri text") },
+                            placeholder = { Text("Type or paste text here…") },
+                            minLines = 5
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+
+                        if (mode == ReadingMode.ENGLISH_SOUND) {
+                            Text("Sambalpuri-style sound guide", style = MaterialTheme.typography.titleMedium)
+                            OutlinedTextField(
+                                value = pronunciation,
+                                onValueChange = { pronunciation = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Pronunciation preview (editable)") },
+                                minLines = 3
+                            )
+                            Text(
+                                "This starter sound guide recognises common English words and phrases. Unknown words may need manual correction. A trained native Sambalpuri voice is required for fully natural pronunciation.",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Button(
-                                onClick = { speak(input) },
-                                enabled = input.isNotBlank() && voiceReady,
+                                onClick = {
+                                    val textToRead = if (mode == ReadingMode.ENGLISH_SOUND) pronunciation else input
+                                    speak(textToRead)
+                                },
+                                enabled = (if (mode == ReadingMode.ENGLISH_SOUND) pronunciation else input).isNotBlank() && voiceReady,
                                 modifier = Modifier.weight(1f)
                             ) { Text("Read aloud") }
-                            OutlinedButton(
-                                onClick = { tts?.stop() },
-                                modifier = Modifier.weight(1f)
-                            ) { Text("Stop") }
+                            OutlinedButton(onClick = { tts?.stop() }, modifier = Modifier.weight(1f)) {
+                                Text("Stop")
+                            }
                         }
+
                         Text(voiceMessage, style = MaterialTheme.typography.bodySmall)
+                        Text("Share text from other apps", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            "Voice quality notice",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            "This first build uses your phone’s installed Odia voice only when available. Odia system speech is not the same as native Sambalpuri. Accurate regional pronunciation needs a dedicated Sambalpuri voice model and verified speaker recordings.",
+                            "Use Share → Sambalpuri Voice from an app that supports text sharing. The selected text will appear here.",
                             style = MaterialTheme.typography.bodyMedium
                         )
-                        Spacer(Modifier.height(8.dp))
-                        Text("Sambalpuri AI voice engine · Early development",
-                            style = MaterialTheme.typography.labelSmall)
+                        Text("Voice status", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "This build uses the Odia voice installed on your phone as a temporary playback engine. It is not yet a trained native Sambalpuri voice.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                 }
             }
         }
+    }
+
+    private fun receiveSharedText(source: Intent?) {
+        if (source?.action == Intent.ACTION_SEND && source.type == "text/plain") {
+            sharedText = source.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        receiveSharedText(intent)
     }
 
     override fun onInit(status: Int) {
@@ -106,9 +164,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         val result = tts?.setLanguage(Locale("or", "IN")) ?: LANG_NOT_SUPPORTED
         voiceReady = result != LANG_MISSING_DATA && result != LANG_NOT_SUPPORTED
         voiceMessage = if (voiceReady) {
-            "Temporary device voice available (Odia). Native Sambalpuri voice is not connected yet."
+            "Odia device voice available. Native Sambalpuri voice is not connected yet."
         } else {
-            "No compatible Odia voice is installed. Install a supported voice in Android text-to-speech settings."
+            "No compatible Odia voice is installed. Install one in Android text-to-speech settings."
         }
     }
 
@@ -123,5 +181,61 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         tts?.shutdown()
         tts = null
         super.onDestroy()
+    }
+}
+
+private object EnglishSoundGuide {
+    private val words = mapOf(
+        "hello" to "ହେଲୋ",
+        "hi" to "ହାଏ",
+        "hey" to "ହେ",
+        "good" to "ଗୁଡ୍",
+        "morning" to "ମର୍ନିଂ",
+        "afternoon" to "ଆଫ୍ଟରନୁନ୍",
+        "evening" to "ଇଭନିଂ",
+        "night" to "ନାଇଟ୍",
+        "how" to "ହାଉ",
+        "are" to "ଆର୍",
+        "you" to "ୟୁ",
+        "what" to "ୱଟ୍",
+        "is" to "ଇଜ୍",
+        "your" to "ୟୋର୍",
+        "name" to "ନେମ୍",
+        "my" to "ମାଇ",
+        "i" to "ଆଇ",
+        "am" to "ଏମ୍",
+        "fine" to "ଫାଇନ୍",
+        "thanks" to "ଥ୍ୟାଙ୍କ୍ସ",
+        "thank" to "ଥ୍ୟାଙ୍କ୍",
+        "please" to "ପ୍ଲିଜ୍",
+        "sorry" to "ସରି",
+        "yes" to "ୟେସ୍",
+        "no" to "ନୋ",
+        "where" to "ୱେର୍",
+        "when" to "ୱେନ୍",
+        "why" to "ୱାଇ",
+        "who" to "ହୁ",
+        "doing" to "ଡୁଇଂ",
+        "do" to "ଡୁ",
+        "come" to "କମ୍",
+        "going" to "ଗୋଇଂ",
+        "go" to "ଗୋ",
+        "today" to "ଟୁଡେ",
+        "tomorrow" to "ଟୁମାରୋ",
+        "love" to "ଲଭ୍",
+        "friend" to "ଫ୍ରେଣ୍ଡ୍",
+        "message" to "ମେସେଜ୍",
+        "read" to "ରିଡ୍",
+        "instagram" to "ଇନଷ୍ଟାଗ୍ରାମ୍"
+    )
+
+    fun convert(text: String): String {
+        val tokenRegex = Regex("[A-Za-z]+(?:'[A-Za-z]+)?|[^A-Za-z]+")
+        return tokenRegex.findAll(text).joinToString("") { match ->
+            val token = match.value
+            if (token.firstOrNull()?.isLetter() == true) {
+                words[token.lowercase(Locale.ROOT)] ?: token
+            } else token
+        }
     }
 }
