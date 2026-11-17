@@ -107,8 +107,15 @@ class OfflineKittenEngine(context: Context) {
                     sid = speakerId.coerceIn(0, 7),
                     speed = speed.coerceIn(0.5f, 2.0f)
                 )
-                require(audio.sampleRate > 0) { "The voice model returned an invalid sample rate." }
-                require(audio.samples.isNotEmpty()) { "The voice model returned empty audio. Try different text." }
+                // Use the initialized model's metadata as the authoritative rate.
+                // GeneratedAudio.sampleRate may be invalid in some Android bindings.
+                val sampleRate = tts.sampleRate
+                require(sampleRate in 8000..48000) {
+                    "Offline model reported unsupported sample rate: $sampleRate Hz."
+                }
+                require(audio.samples.isNotEmpty()) {
+                    "The voice model returned empty audio. Try different text."
+                }
 
                 val pcm = ShortArray(audio.samples.size) { index ->
                     val sample = audio.samples[index]
@@ -117,7 +124,7 @@ class OfflineKittenEngine(context: Context) {
                 }
 
                 val minBuffer = AudioTrack.getMinBufferSize(
-                    audio.sampleRate,
+                    sampleRate,
                     AudioFormat.CHANNEL_OUT_MONO,
                     AudioFormat.ENCODING_PCM_16BIT
                 )
@@ -134,7 +141,7 @@ class OfflineKittenEngine(context: Context) {
                     .setAudioFormat(
                         AudioFormat.Builder()
                             .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                            .setSampleRate(audio.sampleRate)
+                            .setSampleRate(sampleRate)
                             .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                             .build()
                     )
@@ -157,7 +164,7 @@ class OfflineKittenEngine(context: Context) {
 
                 onStatus("Playing offline neural voice • Speaker ${speakerId + 1}")
                 val deadline = SystemClock.elapsedRealtime() +
-                    (pcm.size * 1000L / audio.sampleRate) + 10000L
+                    (pcm.size * 1000L / sampleRate) + 10000L
                 while (track.playbackHeadPosition.toLong() < pcm.size.toLong()) {
                     check(SystemClock.elapsedRealtime() < deadline) { "Audio playback timed out." }
                     SystemClock.sleep(25)
