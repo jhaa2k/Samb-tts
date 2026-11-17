@@ -14,6 +14,7 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.atomic.AtomicInteger
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 
@@ -25,7 +26,7 @@ class OfflineKittenEngine(context: Context) {
         "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kitten-nano-en-v0_1-fp16.tar.bz2"
 
     @Volatile private var player: AudioTrack? = null
-    @Volatile private var generationId = 0
+    private val generationId = AtomicInteger(0)
 
     fun isInstalled(): Boolean =
         File(modelDir, "model.fp16.onnx").let { it.isFile && it.length() > 0L } &&
@@ -114,7 +115,7 @@ class OfflineKittenEngine(context: Context) {
     }
 
     fun stop() {
-        generationId++
+        generationId.incrementAndGet()
         val old = player
         player = null
         try { old?.pause() } catch (_: Exception) {}
@@ -131,9 +132,10 @@ class OfflineKittenEngine(context: Context) {
         numThreads: Int = 2,
         onStatus: (String) -> Unit
     ) {
-        val requestId = ++generationId
+        val requestId = generationId.incrementAndGet()
         Thread {
             var tts: OfflineTts? = null
+            var activeTrack: AudioTrack? = null
             try {
                 if (!isInstalled()) {
                     onStatus("Offline voice pack is not installed. Open Offline and download it first.")
@@ -166,21 +168,8 @@ class OfflineKittenEngine(context: Context) {
                     "Selected speaker is not available in this voice pack."
                 }
 
-                onStatus("Generating speech…")
-                val audio = tts.generate(
-                    text = text.trim(),
-                    sid = speakerId.coerceAtLeast(0),
-                    speed = speed.coerceIn(0.5f, 2.0f)
-                )
-                check(audio.samples.isNotEmpty()) { "Voice model generated no audio samples." }
-                val outputRate = audio.sampleRate
-                check(outputRate in 8000..48000) { "Generated audio returned an invalid sample rate: $outputRate Hz." }
-                val peak = audio.samples.maxOf { kotlin.math.abs(it) }
-                check(peak > 0.0001f) { "Generated audio is silent (peak amplitude is zero)." }
-
-                val pcm = ShortArray(audio.samples.size) { index ->
-                    (audio.samples[index].coerceIn(-1.0f, 1.0f) * 32767.0f).toInt().toShort()
-                }
+                val outputRate = tts.sampleRate()
+                check(outputRate in 8000..48000) { "Offline output sample rate is invalid: $outputRate Hz." }
                 val minBuffer = AudioTrack.getMinBufferSize(
                     outputRate,
                     AudioFormat.CHANNEL_OUT_MONO,
@@ -201,39 +190,73 @@ class OfflineKittenEngine(context: Context) {
                             .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                             .build()
                     )
-                    .setBufferSizeInBytes(maxOf(minBuffer * 2, 8192))
+                    .setBufferSizeInBytes(maxOf(minBuffer * 2, 16384))
                     .setTransferMode(AudioTrack.MODE_STREAM)
                     .build()
-                if (track.state != AudioTrack.STATE_INITIALIZED) {
+                check(track.state == AudioTrack.STATE_INITIALIZED) {
                     track.release()
-                    error("Android could not initialize audio output.")
+                    "Android could not initialize audio output."
                 }
-                if (requestId != generationId) {
+                if (requestId != generationId.get()) {
                     track.release()
                     return@Thread
                 }
+                activeTrack = track
                 player = track
                 track.setVolume(volume.coerceIn(0f, 1f))
-                onStatus("Playing offline voice at ${outputRate} Hz")
                 track.play()
-                var offset = 0
-                while (offset < pcm.size && requestId == generationId) {
-                    val count = minOf(4096, pcm.size - offset)
-                    val written = track.write(pcm, offset, count, AudioTrack.WRITE_BLOCKING)
-                    check(written > 0) { "Audio output write failed ($written)." }
-                    offset += written
+                onStatus("Generating and playing speech · $outputRate Hz")
+
+                val audio = tts.generateWithCallback(
+                    text = text.trim(),
+                    sid = speakerId.coerceAtLeast(0),
+                    speed = speed.coerceIn(0.5f, 2.0f)
+                ) { samples ->
+                    if (requestId != generationId.get()) {
+                        0
+                    } else {
+                        val pcm = ShortArray(samples.size) { index ->
+                            (samples[index].coerceIn(-1.0f, 1.0f) * 32767.0f).toInt().toShort()
+                        }
+                        var offset = 0
+                        var ok = true
+                        while (offset < pcm.size && requestId == generationId.get()) {
+                            val written = track.write(
+                                pcm,
+                                offset,
+                                pcm.size - offset,
+                                AudioTrack.WRITE_BLOCKING
+                            )
+                            if (written <= 0) {
+                                ok = false
+                                break
+                            }
+                            offset += written
+                        }
+                        if (ok && requestId == generationId.get()) 1 else 0
+                    }
                 }
+                check(requestId == generationId.get()) { "Speech generation was stopped." }
+                check(audio.samples.isNotEmpty()) { "Voice model generated no audio samples." }
+                check(audio.sampleRate == outputRate) {
+                    "Generated audio rate (${audio.sampleRate} Hz) does not match model rate ($outputRate Hz)."
+                }
+                val peak = audio.samples.maxOf { kotlin.math.abs(it) }
+                check(peak > 0.0001f) { "Voice model generated silent audio (peak amplitude is zero)." }
+
                 if (player === track) player = null
                 try { track.stop() } catch (_: Exception) {}
                 track.release()
-                if (requestId == generationId) onStatus("Speech finished.")
+                activeTrack = null
+                if (requestId == generationId.get()) onStatus("Speech finished · audio was streamed to speaker.")
             } catch (error: Exception) {
-                val failedTrack = player
-                player = null
+                val failedTrack = activeTrack
+                if (player === failedTrack) player = null
                 try { failedTrack?.pause() } catch (_: Exception) {}
                 try { failedTrack?.flush() } catch (_: Exception) {}
                 try { failedTrack?.release() } catch (_: Exception) {}
-                if (requestId == generationId) {
+                activeTrack = null
+                if (requestId == generationId.get()) {
                     onStatus("Offline speech error: ${error.message ?: error.javaClass.simpleName}")
                 }
             } finally {
