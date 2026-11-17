@@ -87,6 +87,26 @@ class OfflineKittenEngine(context: Context) {
                 val extractedModel = if (File(staging, "kitten-nano-en-v0_1-fp16").isDirectory) {
                     File(staging, "kitten-nano-en-v0_1-fp16")
                 } else staging
+                val lexiconFile = File(extractedModel, "lexicon-en-us.txt")
+                onStatus("Downloading required English pronunciation dictionary…")
+                val lexiconConnection = (URL("https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/lexicon-en-us.txt").openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 30000
+                    readTimeout = 60000
+                    instanceFollowRedirects = true
+                }
+                try {
+                    val code = lexiconConnection.responseCode
+                    check(code in 200..299) { "Pronunciation dictionary download failed (HTTP $code)." }
+                    lexiconConnection.inputStream.use { input ->
+                        FileOutputStream(lexiconFile).use { output -> input.copyTo(output) }
+                    }
+                } finally {
+                    lexiconConnection.disconnect()
+                }
+                check(lexiconFile.isFile && lexiconFile.length() > 0L) {
+                    "English pronunciation dictionary is missing or empty."
+                }
+
                 val required = listOf("model.fp16.onnx", "voices.bin", "tokens.txt", "espeak-ng-data")
                 required.forEach { name ->
                     val file = File(extractedModel, name)
@@ -153,7 +173,7 @@ class OfflineKittenEngine(context: Context) {
                             model = File(modelDir, "model.fp16.onnx").absolutePath,
                             voices = File(modelDir, "voices.bin").absolutePath,
                             tokens = File(modelDir, "tokens.txt").absolutePath,
-                            dataDir = File(modelDir, "espeak-ng-data").absolutePath
+                            lexicon = File(modelDir, "lexicon-en-us.txt").absolutePath
                         ),
                         numThreads = numThreads.coerceIn(1, 4),
                         debug = false,
@@ -162,8 +182,7 @@ class OfflineKittenEngine(context: Context) {
                     maxNumSentences = 1
                 )
                 tts = OfflineTts(config = config)
-                val modelRate = tts.sampleRate()
-                check(modelRate in 8000..48000) { "Offline model returned invalid sample rate: $modelRate Hz." }
+                check(tts.sampleRate() in 8000..48000) { "Offline model returned invalid sample rate: ${tts.sampleRate()} Hz." }
                 check(tts.numSpeakers() <= 0 || speakerId in 0 until tts.numSpeakers()) {
                     "Selected speaker is not available in this voice pack."
                 }
