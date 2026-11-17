@@ -179,7 +179,19 @@ class MainActivity : ComponentActivity() {
                                 }
 
                                 AppScreen.VOICES -> {
-                                    InfoCard("ONLINE VOICE LIBRARY", "Choose an OpenAI voice or enter a voice ID from your ElevenLabs account. Samples require a configured server.")
+                                    if (provider == "offline") {
+                                        InfoCard("OFFLINE VOICES", "These voices run on your phone. Download the voice pack from Offline before testing.")
+                                        offlineVoices.forEach { voice ->
+                                            VoiceRow(voice.name, voice.style, selectedVoice == voice.name, "Preview") {
+                                                selectedVoice = voice.name
+                                                if (offlineInstalled) {
+                                                    stopPlayback()
+                                                    offlineEngine.speak("Hello. This is an offline voice test.", voice.speakerId, speechSpeed, outputVolume, offlineThreads) { s -> runOnUiThread { notice = s } }
+                                                } else notice = "Download the offline voice pack first."
+                                            }
+                                        }
+                                    } else {
+                                    InfoCard("ONLINE VOICE LIBRARY", "Online previews require a deployed speech server URL and a valid provider API key.")
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         ModeButton("OpenAI", provider == "openai", Modifier.weight(1f)) { provider = "openai" }
                                         ModeButton("ElevenLabs", provider == "elevenlabs", Modifier.weight(1f)) { provider = "elevenlabs" }
@@ -200,6 +212,7 @@ class MainActivity : ComponentActivity() {
                                         }, modifier = Modifier.fillMaxWidth(), enabled = elevenVoiceId.isNotBlank()) { Text("PREVIEW VOICE") }
                                     }
                                     StatusCard(notice)
+                                    }
                                 }
 
                                 AppScreen.OFFLINE -> {
