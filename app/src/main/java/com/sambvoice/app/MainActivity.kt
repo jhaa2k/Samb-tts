@@ -236,6 +236,18 @@ class MainActivity : ComponentActivity() {
                                         enabled = !installing && !offlineInstalled,
                                         modifier = Modifier.fillMaxWidth()
                                     ) { Text(if (installing) "DOWNLOADING MODEL…" else if (offlineInstalled) "VOICE PACK INSTALLED" else "DOWNLOAD OFFLINE VOICE PACK") }
+                                    OutlinedButton(
+                                        onClick = {
+                                            if (offlineInstalled) {
+                                                stopPlayback()
+                                                provider = "offline"
+                                                selectedVoice = offlineVoices.first().name
+                                                offlineEngine.speak("Hello. This is a test of offline speech audio.", 0, speechSpeed, outputVolume, offlineThreads) { s -> runOnUiThread { notice = s } }
+                                            } else notice = "Download the offline voice pack first."
+                                        },
+                                        enabled = offlineInstalled,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) { Text("TEST OFFLINE AUDIO") }
                                     Text("OFFLINE SPEAKERS", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                                     offlineVoices.forEach { voice ->
                                         VoiceRow(voice.name, voice.style, selectedVoice == voice.name, "Preview") {
