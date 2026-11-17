@@ -226,6 +226,11 @@ class OfflineKittenEngine(context: Context) {
                 track.release()
                 if (requestId == generationId) onStatus("Speech finished.")
             } catch (error: Exception) {
+                val failedTrack = player
+                player = null
+                try { failedTrack?.pause() } catch (_: Exception) {}
+                try { failedTrack?.flush() } catch (_: Exception) {}
+                try { failedTrack?.release() } catch (_: Exception) {}
                 if (requestId == generationId) {
                     onStatus("Offline speech error: ${error.message ?: error.javaClass.simpleName}")
                 }
