@@ -64,7 +64,7 @@ class MainActivity : ComponentActivity() {
             var screen by remember { mutableStateOf(AppScreen.STUDIO) }
             val prefs = remember { getSharedPreferences("voice_settings", MODE_PRIVATE) }
             var input by remember { mutableStateOf(sharedText) }
-            var provider by remember { mutableStateOf(if (prefs.getString("default_engine", "offline") == "offline") "offline" else (prefs.getString("default_provider", "openai") ?: "openai")) }
+            var provider by remember { mutableStateOf(if (prefs.getString("server_url", "").isNullOrBlank() || prefs.getString("default_engine", "offline") == "offline") "offline" else (prefs.getString("default_provider", "openai") ?: "openai")) }
             var selectedVoice by remember { mutableStateOf(prefs.getString("selected_voice", if (provider == "offline") "Speaker 1" else "coral") ?: if (provider == "offline") "Speaker 1" else "coral") }
             var elevenVoiceId by remember { mutableStateOf(prefs.getString("eleven_voice_id", "") ?: "") }
             var serverUrl by remember { mutableStateOf(prefs.getString("server_url", "") ?: "") }
@@ -74,7 +74,7 @@ class MainActivity : ComponentActivity() {
             var speechSpeed by remember { mutableStateOf(prefs.getFloat("speech_speed", 1.0f)) }
             var outputVolume by remember { mutableStateOf(prefs.getFloat("output_volume", 1.0f)) }
             var offlineThreads by remember { mutableStateOf(prefs.getInt("offline_threads", 2).coerceIn(1, 4)) }
-            var defaultEngine by remember { mutableStateOf(prefs.getString("default_engine", "offline") ?: "offline") }
+            var defaultEngine by remember { mutableStateOf(if (prefs.getString("server_url", "").isNullOrBlank()) "offline" else (prefs.getString("default_engine", "offline") ?: "offline")) }
             var autoStop by remember { mutableStateOf(prefs.getBoolean("stop_before_generate", true)) }
 
             LaunchedEffect(sharedText) { if (sharedText.isNotBlank()) input = sharedText }
