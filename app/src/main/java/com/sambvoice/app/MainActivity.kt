@@ -64,10 +64,10 @@ class MainActivity : ComponentActivity() {
             var screen by remember { mutableStateOf(AppScreen.STUDIO) }
             val prefs = remember { getSharedPreferences("voice_settings", MODE_PRIVATE) }
             var input by remember { mutableStateOf(sharedText) }
-            var provider by remember { mutableStateOf(if (prefs.getString("default_engine", "online") == "offline") "offline" else "openai") }
-            var selectedVoice by remember { mutableStateOf("coral") }
-            var elevenVoiceId by remember { mutableStateOf("") }
-            var serverUrl by remember { mutableStateOf("") }
+            var provider by remember { mutableStateOf(if (prefs.getString("default_engine", "online") == "offline") "offline" else (prefs.getString("default_provider", "openai") ?: "openai")) }
+            var selectedVoice by remember { mutableStateOf(prefs.getString("selected_voice", "coral") ?: "coral") }
+            var elevenVoiceId by remember { mutableStateOf(prefs.getString("eleven_voice_id", "") ?: "") }
+            var serverUrl by remember { mutableStateOf(prefs.getString("server_url", "") ?: "") }
             var notice by remember { mutableStateOf("Ready") }
             var offlineInstalled by remember { mutableStateOf(offlineEngine.isInstalled()) }
             var installing by remember { mutableStateOf(false) }
@@ -188,11 +188,12 @@ class MainActivity : ComponentActivity() {
                                         onlineVoices.forEach { voice ->
                                             VoiceRow(voice.name, voice.style, selectedVoice == voice.voiceId, "Preview") {
                                                 selectedVoice = voice.voiceId
+                                                prefs.edit().putString("selected_voice", voice.voiceId).apply()
                                                 speakOnline("Hello! This is a short preview of the selected AI voice.", "openai", voice.voiceId, serverUrl) { s -> runOnUiThread { notice = s } }
                                             }
                                         }
                                     } else {
-                                        OutlinedTextField(value = elevenVoiceId, onValueChange = { elevenVoiceId = it }, modifier = Modifier.fillMaxWidth(), label = { Text("ElevenLabs voice ID") }, singleLine = true)
+                                        OutlinedTextField(value = elevenVoiceId, onValueChange = { elevenVoiceId = it; prefs.edit().putString("eleven_voice_id", it).apply() }, modifier = Modifier.fillMaxWidth(), label = { Text("ElevenLabs voice ID") }, singleLine = true)
                                         Button(onClick = {
                                             if (elevenVoiceId.isBlank()) notice = "Enter a voice ID first."
                                             else speakOnline("Hello! This is your selected ElevenLabs voice.", "elevenlabs", elevenVoiceId.trim(), serverUrl) { s -> runOnUiThread { notice = s } }
@@ -238,7 +239,7 @@ class MainActivity : ComponentActivity() {
                                 AppScreen.SETTINGS -> {
                                     InfoCard("CONNECTION", "Your API keys stay on the hosted server. Do not paste secret keys into this app or commit them to GitHub.")
                                     OutlinedTextField(
-                                        value = serverUrl, onValueChange = { serverUrl = it.trim() },
+                                        value = serverUrl, onValueChange = { serverUrl = it.trim(); prefs.edit().putString("server_url", serverUrl).apply() },
                                         modifier = Modifier.fillMaxWidth(),
                                         label = { Text("Hosted engine HTTPS URL") },
                                         placeholder = { Text("https://your-engine.example.com") },
@@ -248,8 +249,13 @@ class MainActivity : ComponentActivity() {
                                     Divider(color = scheme.surfaceVariant)
                                     Text("DEFAULT ENGINE", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        ModeButton("ONLINE", defaultEngine == "online", Modifier.weight(1f)) { defaultEngine = "online"; provider = "openai"; prefs.edit().putString("default_engine", "online").apply() }
-                                        ModeButton("OFFLINE", defaultEngine == "offline", Modifier.weight(1f)) { defaultEngine = "offline"; provider = "offline"; selectedVoice = offlineVoices.first().name; prefs.edit().putString("default_engine", "offline").apply() }
+                                        ModeButton("ONLINE", defaultEngine == "online", Modifier.weight(1f)) { defaultEngine = "online"; provider = "openai"; prefs.edit().putString("default_engine", "online").putString("default_provider", "openai").apply() }
+                                        ModeButton("OFFLINE", defaultEngine == "offline", Modifier.weight(1f)) { defaultEngine = "offline"; provider = "offline"; selectedVoice = offlineVoices.first().name; prefs.edit().putString("selected_voice", selectedVoice).putString("default_engine", "offline").apply() }
+                                    }
+                                    Text("ONLINE PROVIDER", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        ModeButton("OPENAI", provider == "openai", Modifier.weight(1f)) { provider = "openai"; prefs.edit().putString("default_provider", "openai").apply() }
+                                        ModeButton("ELEVENLABS", provider == "elevenlabs", Modifier.weight(1f)) { provider = "elevenlabs"; prefs.edit().putString("default_provider", "elevenlabs").apply() }
                                     }
                                     Text("SPEECH SPEED · " + "%.2f".format(speechSpeed) + "×", color = scheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                     Slider(value = speechSpeed, onValueChange = { speechSpeed = it; prefs.edit().putFloat("speech_speed", it).apply() }, valueRange = 0.5f..2.0f)
