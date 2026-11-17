@@ -2,7 +2,8 @@ package com.sambvoice.app
 
 import android.content.Context
 import android.media.AudioAttributes
-import android.media.MediaPlayer
+import android.media.AudioFormat
+import android.media.AudioTrack
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsKittenModelConfig
@@ -23,8 +24,7 @@ class OfflineKittenEngine(context: Context) {
     private val archiveUrl =
         "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kitten-nano-en-v0_1-fp16.tar.bz2"
 
-    @Volatile private var player: MediaPlayer? = null
-    @Volatile private var playbackFile: File? = null
+    @Volatile private var player: AudioTrack? = null
     @Volatile private var generationId = 0
 
     fun isInstalled(): Boolean =
@@ -117,10 +117,10 @@ class OfflineKittenEngine(context: Context) {
         generationId++
         val old = player
         player = null
+        try { old?.pause() } catch (_: Exception) {}
+        try { old?.flush() } catch (_: Exception) {}
         try { old?.stop() } catch (_: Exception) {}
         try { old?.release() } catch (_: Exception) {}
-        playbackFile?.delete()
-        playbackFile = null
     }
 
     fun speak(
@@ -176,52 +176,55 @@ class OfflineKittenEngine(context: Context) {
                 val peak = audio.samples.maxOf { kotlin.math.abs(it) }
                 check(peak > 0.0001f) { "Generated audio is silent (peak amplitude is zero)." }
 
-                val wav = File(appContext.cacheDir, "offline-speech-${requestId}.wav")
-                check(audio.save(wav.absolutePath)) { "Could not write generated WAV audio." }
-                check(wav.exists() && wav.length() > 44L) { "Generated WAV file is empty or invalid." }
+                val pcm = ShortArray(audio.samples.size) { index ->
+                    (audio.samples[index].coerceIn(-1.0f, 1.0f) * 32767.0f).toInt().toShort()
+                }
+                val minBuffer = AudioTrack.getMinBufferSize(
+                    modelRate,
+                    AudioFormat.CHANNEL_OUT_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT
+                )
+                check(minBuffer > 0) { "Android audio output is unavailable (buffer=$minBuffer)." }
+                val track = AudioTrack.Builder()
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    .setAudioFormat(
+                        AudioFormat.Builder()
+                            .setSampleRate(modelRate)
+                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                            .build()
+                    )
+                    .setBufferSizeInBytes(maxOf(minBuffer * 2, 8192))
+                    .setTransferMode(AudioTrack.MODE_STREAM)
+                    .build()
+                if (track.state != AudioTrack.STATE_INITIALIZED) {
+                    track.release()
+                    error("Android could not initialize audio output.")
+                }
                 if (requestId != generationId) {
-                    wav.delete()
+                    track.release()
                     return@Thread
                 }
-
-                val media = MediaPlayer()
-                media.setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                        .build()
-                )
-                media.setDataSource(wav.absolutePath)
-                media.setVolume(volume.coerceIn(0f, 1f), volume.coerceIn(0f, 1f))
-                media.setOnPreparedListener { prepared ->
-                    if (requestId != generationId) {
-                        prepared.release()
-                        wav.delete()
-                    } else {
-                        player = prepared
-                        playbackFile = wav
-                        onStatus("Playing offline voice · Speaker ${speakerId + 1} · ${modelRate} Hz")
-                        prepared.start()
-                    }
+                player = track
+                track.setVolume(volume.coerceIn(0f, 1f))
+                onStatus("Playing offline voice at ${modelRate} Hz")
+                track.play()
+                var offset = 0
+                while (offset < pcm.size && requestId == generationId) {
+                    val count = minOf(4096, pcm.size - offset)
+                    val written = track.write(pcm, offset, count, AudioTrack.WRITE_BLOCKING)
+                    check(written > 0) { "Audio output write failed ($written)." }
+                    offset += written
                 }
-                media.setOnCompletionListener { completed ->
-                    completed.release()
-                    if (player === completed) player = null
-                    wav.delete()
-                    if (playbackFile == wav) playbackFile = null
-                    if (requestId == generationId) onStatus("Speech finished.")
-                }
-                media.setOnErrorListener { failed, what, extra ->
-                    failed.release()
-                    if (player === failed) player = null
-                    wav.delete()
-                    if (playbackFile == wav) playbackFile = null
-                    if (requestId == generationId) onStatus("Offline audio playback error ($what/$extra).")
-                    true
-                }
-                media.prepareAsync()
-                tts.release()
-                tts = null
+                if (player === track) player = null
+                try { track.stop() } catch (_: Exception) {}
+                track.release()
+                if (requestId == generationId) onStatus("Speech finished.")
             } catch (error: Exception) {
                 if (requestId == generationId) {
                     onStatus("Offline speech error: ${error.message ?: error.javaClass.simpleName}")
