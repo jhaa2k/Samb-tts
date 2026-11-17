@@ -70,6 +70,12 @@ class MainActivity : ComponentActivity() {
             var notice by remember { mutableStateOf("Ready") }
             var offlineInstalled by remember { mutableStateOf(offlineEngine.isInstalled()) }
             var installing by remember { mutableStateOf(false) }
+            val prefs = remember { getSharedPreferences("voice_settings", MODE_PRIVATE) }
+            var speechSpeed by remember { mutableStateOf(prefs.getFloat("speech_speed", 1.0f)) }
+            var outputVolume by remember { mutableStateOf(prefs.getFloat("output_volume", 1.0f)) }
+            var offlineThreads by remember { mutableStateOf(prefs.getInt("offline_threads", 2).coerceIn(1, 4)) }
+            var defaultEngine by remember { mutableStateOf(prefs.getString("default_engine", "online") ?: "online") }
+            var autoStop by remember { mutableStateOf(prefs.getBoolean("stop_before_generate", true)) }
 
             LaunchedEffect(sharedText) { if (sharedText.isNotBlank()) input = sharedText }
 
@@ -154,11 +160,14 @@ class MainActivity : ComponentActivity() {
                                             else if (provider == "offline") {
                                                 val voice = offlineVoices.firstOrNull { it.name == selectedVoice } ?: offlineVoices.first()
                                                 if (!offlineInstalled) notice = "Install the offline voice pack from Offline screen."
-                                                else offlineEngine.speak(input, voice.speakerId) { s -> runOnUiThread { notice = s } }
+                                                else {
+                                                    if (autoStop) stopPlayback()
+                                                    offlineEngine.speak(input, voice.speakerId, speechSpeed, outputVolume, offlineThreads) { s -> runOnUiThread { notice = s } }
+                                                }
                                             } else {
                                                 val voice = if (provider == "elevenlabs") elevenVoiceId.trim() else selectedVoice
                                                 if (voice.isBlank()) notice = "Enter an ElevenLabs voice ID in Voices."
-                                                else speakOnline(input, provider, voice, serverUrl) { s -> runOnUiThread { notice = s } }
+                                                else speakOnline(input, provider, voice, serverUrl, speechSpeed, outputVolume) { s -> runOnUiThread { notice = s } }
                                             }
                                         },
                                         enabled = input.isNotBlank(),
@@ -237,6 +246,29 @@ class MainActivity : ComponentActivity() {
                                     )
                                     Text("Online providers: OpenAI and ElevenLabs. Configure OPENAI_API_KEY and ELEVENLABS_API_KEY on your server.", color = scheme.onSurfaceVariant, fontSize = 12.sp)
                                     Divider(color = scheme.surfaceVariant)
+                                    Text("DEFAULT ENGINE", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        ModeButton("ONLINE", defaultEngine == "online", Modifier.weight(1f)) { defaultEngine = "online"; prefs.edit().putString("default_engine", "online").apply() }
+                                        ModeButton("OFFLINE", defaultEngine == "offline", Modifier.weight(1f)) { defaultEngine = "offline"; prefs.edit().putString("default_engine", "offline").apply() }
+                                    }
+                                    Text("SPEECH SPEED · " + "%.2f".format(speechSpeed) + "×", color = scheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                    Slider(value = speechSpeed, onValueChange = { speechSpeed = it; prefs.edit().putFloat("speech_speed", it).apply() }, valueRange = 0.5f..2.0f)
+                                    Text("OUTPUT VOLUME · " + (outputVolume * 100).toInt() + "%", color = scheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                    Slider(value = outputVolume, onValueChange = { outputVolume = it; prefs.edit().putFloat("output_volume", it).apply() }, valueRange = 0f..1f)
+                                    Text("OFFLINE CPU THREADS · " + offlineThreads, color = scheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                    Slider(value = offlineThreads.toFloat(), onValueChange = { offlineThreads = it.toInt().coerceIn(1, 4); prefs.edit().putInt("offline_threads", offlineThreads).apply() }, valueRange = 1f..4f, steps = 2)
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Column(Modifier.weight(1f)) { Text("Stop previous audio", color = scheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.SemiBold); Text("Stop active playback before generating new speech", color = scheme.onSurfaceVariant, fontSize = 11.sp) }
+                                        Switch(checked = autoStop, onCheckedChange = { autoStop = it; prefs.edit().putBoolean("stop_before_generate", it).apply() })
+                                    }
+                                    OutlinedButton(onClick = {
+                                        speechSpeed = 1f; outputVolume = 1f; offlineThreads = 2; defaultEngine = "online"; autoStop = true
+                                        prefs.edit().putFloat("speech_speed", 1f).putFloat("output_volume", 1f).putInt("offline_threads", 2).putString("default_engine", "online").putBoolean("stop_before_generate", true).apply()
+                                        notice = "Settings reset to defaults."
+                                    }, modifier = Modifier.fillMaxWidth()) { Text("RESET SETTINGS") }
+                                    Divider(color = scheme.surfaceVariant)
+                                    Text("AUDIO ENGINE NOTES", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                                    Text("Offline sample rate is fixed by the Kitten Nano model (24 kHz). Pitch control and native Sambalpuri pronunciation are not supported by this English-only model.", color = scheme.onSurfaceVariant, fontSize = 12.sp)
                                     Text("ABOUT", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                                     Text("Sambalpuri Voice · 0.2.0", color = scheme.onSurface, fontWeight = FontWeight.SemiBold)
                                     Text("No Android System TTS fallback. Offline Kitten Nano is English-only. Native Sambalpuri speech needs a dedicated trained model.", color = scheme.onSurfaceVariant, fontSize = 12.sp)
@@ -256,7 +288,7 @@ class MainActivity : ComponentActivity() {
         onlinePlayer = null
     }
 
-    private fun speakOnline(text: String, provider: String, voice: String, baseUrl: String, onStatus: (String) -> Unit) {
+    private fun speakOnline(text: String, provider: String, voice: String, baseUrl: String, speed: Float = 1.0f, volume: Float = 1.0f, onStatus: (String) -> Unit) {
         Thread {
             try {
                 if (baseUrl.isBlank()) { onStatus("Set your hosted engine URL in Settings first."); return@Thread }
@@ -268,7 +300,7 @@ class MainActivity : ComponentActivity() {
                     doOutput = true
                     setRequestProperty("Content-Type", "application/json")
                 }
-                val payload = JSONObject().put("text", text).put("provider", provider).put("voice", voice).put("speed", 1.0).put("style", "Speak naturally and clearly.").toString()
+                val payload = JSONObject().put("text", text).put("provider", provider).put("voice", voice).put("speed", speed.coerceIn(0.5f, 2.0f).toDouble()).put("style", "Speak naturally and clearly.").toString()
                 connection.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
                 val code = connection.responseCode
                 if (code !in 200..299) {
@@ -282,7 +314,7 @@ class MainActivity : ComponentActivity() {
                     stopPlayback()
                     onlinePlayer = MediaPlayer().apply {
                         setDataSource(audioFile.absolutePath)
-                        setOnPreparedListener { it.start(); onStatus("Playing $provider · $voice") }
+                        setOnPreparedListener { it.setVolume(volume.coerceIn(0f, 1f), volume.coerceIn(0f, 1f)); it.start(); onStatus("Playing $provider · $voice") }
                         setOnCompletionListener { it.release(); onlinePlayer = null; onStatus("Speech finished.") }
                         setOnErrorListener { player, _, _ -> player.release(); onlinePlayer = null; onStatus("Audio playback failed."); true }
                         prepareAsync()
