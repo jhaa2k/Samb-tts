@@ -62,8 +62,9 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             var screen by remember { mutableStateOf(AppScreen.STUDIO) }
+            val prefs = remember { getSharedPreferences("voice_settings", MODE_PRIVATE) }
             var input by remember { mutableStateOf(sharedText) }
-            var provider by remember { mutableStateOf("openai") }
+            var provider by remember { mutableStateOf(if (prefs.getString("default_engine", "online") == "offline") "offline" else "openai") }
             var selectedVoice by remember { mutableStateOf("coral") }
             var elevenVoiceId by remember { mutableStateOf("") }
             var serverUrl by remember { mutableStateOf("") }
@@ -248,8 +249,8 @@ class MainActivity : ComponentActivity() {
                                     Divider(color = scheme.surfaceVariant)
                                     Text("DEFAULT ENGINE", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        ModeButton("ONLINE", defaultEngine == "online", Modifier.weight(1f)) { defaultEngine = "online"; prefs.edit().putString("default_engine", "online").apply() }
-                                        ModeButton("OFFLINE", defaultEngine == "offline", Modifier.weight(1f)) { defaultEngine = "offline"; prefs.edit().putString("default_engine", "offline").apply() }
+                                        ModeButton("ONLINE", defaultEngine == "online", Modifier.weight(1f)) { defaultEngine = "online"; provider = "openai"; prefs.edit().putString("default_engine", "online").apply() }
+                                        ModeButton("OFFLINE", defaultEngine == "offline", Modifier.weight(1f)) { defaultEngine = "offline"; provider = "offline"; selectedVoice = offlineVoices.first().name; prefs.edit().putString("default_engine", "offline").apply() }
                                     }
                                     Text("SPEECH SPEED · " + "%.2f".format(speechSpeed) + "×", color = scheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                     Slider(value = speechSpeed, onValueChange = { speechSpeed = it; prefs.edit().putFloat("speech_speed", it).apply() }, valueRange = 0.5f..2.0f)
