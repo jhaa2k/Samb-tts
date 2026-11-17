@@ -109,9 +109,12 @@ class OfflineKittenEngine(context: Context) {
                 )
                 // Use the initialized model's metadata as the authoritative rate.
                 // GeneratedAudio.sampleRate may be invalid in some Android bindings.
-                val sampleRate = tts.sampleRate
+                val sampleRate = tts.sampleRate()
                 require(sampleRate in 8000..48000) {
                     "Offline model reported unsupported sample rate: $sampleRate Hz."
+                }
+                require(audio.sampleRate == sampleRate) {
+                    "Generated audio rate (undefined Hz) does not match model rate ($sampleRate Hz)."
                 }
                 require(audio.samples.isNotEmpty()) {
                     "The voice model returned empty audio. Try different text."
