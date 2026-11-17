@@ -10,7 +10,7 @@ An Android-first AI text-to-speech studio with online provider adapters and an o
 - Text input and Android Share target for text received from other apps.
 - Online mode UI for OpenAI and ElevenLabs through the project's hosted API gateway.
 - Offline mode powered by Sherpa-ONNX.
-- Downloadable Kitten Nano English model with eight selectable speaker IDs and sample playback.
+- Downloadable Kitten Nano English model with eight selectable speaker IDs, the required English pronunciation lexicon, and chunk-by-chunk AudioTrack playback during synthesis.
 - MP3 playback for online generated speech.
 
 ### Online engine
@@ -24,7 +24,8 @@ The online service is not automatically hosted. Deploy the included `render.yaml
 
 ### Offline engine
 - Sherpa-ONNX 2.0.1 Android runtime is downloaded and checksum-verified by GitHub Actions.
-- Kitten Nano English voice pack is downloaded from the official Sherpa-ONNX model release when the user taps **Download Offline Voice Pack**.
+- Kitten Nano English voice pack and the separate `lexicon-en-us.txt` pronunciation dictionary are downloaded from official Sherpa-ONNX release assets when the user taps **Download Offline Voice Pack**.
+- Speech samples are sent to Android `AudioTrack` from Sherpa-ONNX `generateWithCallback`, rather than waiting for the entire utterance to finish before playback.
 - Eight English speakers are available after the pack is installed.
 - Model files are downloaded separately and are not bundled into the APK.
 
