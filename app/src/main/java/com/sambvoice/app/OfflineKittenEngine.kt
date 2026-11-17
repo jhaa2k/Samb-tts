@@ -2,82 +2,136 @@ package com.sambvoice.app
 
 import android.content.Context
 import android.media.AudioAttributes
-import android.media.AudioFormat
-import android.media.AudioTrack
-import android.os.SystemClock
+import android.media.MediaPlayer
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsKittenModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
-import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
-import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 
 class OfflineKittenEngine(context: Context) {
-    private val root = File(context.filesDir, "voice-models")
+    private val appContext = context.applicationContext
+    private val root = File(appContext.filesDir, "voice-models")
     private val modelDir = File(root, "kitten-nano-en-v0_1-fp16")
     private val archiveUrl =
         "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kitten-nano-en-v0_1-fp16.tar.bz2"
 
+    @Volatile private var player: MediaPlayer? = null
+    @Volatile private var playbackFile: File? = null
+    @Volatile private var generationId = 0
+
     fun isInstalled(): Boolean =
-        File(modelDir, "model.fp16.onnx").exists() &&
-            File(modelDir, "voices.bin").exists() &&
-            File(modelDir, "tokens.txt").exists() &&
+        File(modelDir, "model.fp16.onnx").let { it.isFile && it.length() > 0L } &&
+            File(modelDir, "voices.bin").let { it.isFile && it.length() > 0L } &&
+            File(modelDir, "tokens.txt").let { it.isFile && it.length() > 0L } &&
             File(modelDir, "espeak-ng-data").isDirectory
 
     fun install(onStatus: (String) -> Unit) {
-        root.mkdirs()
-        val archive = File(root, "kitten-nano-en-v0_1-fp16.tar.bz2")
-        try {
-            onStatus("Downloading offline English voice pack…")
-            val connection = (URL(archiveUrl).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 20000
-                readTimeout = 60000
-                instanceFollowRedirects = true
-            }
-            connection.inputStream.use { input ->
-                FileOutputStream(archive).use { output -> input.copyTo(output) }
-            }
-            connection.disconnect()
+        Thread {
+            root.mkdirs()
+            val archive = File(root, "kitten-nano-en-v0_1-fp16.tar.bz2")
+            val staging = File(root, "kitten-nano-installing")
+            try {
+                onStatus("Downloading offline English voice pack…")
+                val connection = (URL(archiveUrl).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 30000
+                    readTimeout = 180000
+                    instanceFollowRedirects = true
+                }
+                try {
+                    val code = connection.responseCode
+                    check(code in 200..299) { "Model download failed (HTTP $code)." }
+                    connection.inputStream.use { input ->
+                        FileOutputStream(archive).use { output -> input.copyTo(output) }
+                    }
+                } finally {
+                    connection.disconnect()
+                }
 
-            onStatus("Installing voice files…")
-            val rootPath = root.canonicalPath + File.separator
-            BZip2CompressorInputStream(BufferedInputStream(FileInputStream(archive))).use { bz ->
-                TarArchiveInputStream(bz).use { tar ->
-                    var entry = tar.nextTarEntry
-                    while (entry != null) {
-                        val target = File(root, entry.name).canonicalFile
-                        require(target.path.startsWith(rootPath)) { "Unsafe model archive entry." }
-                        if (entry.isDirectory) target.mkdirs()
-                        else {
-                            target.parentFile?.mkdirs()
-                            FileOutputStream(target).use { output -> tar.copyTo(output) }
+                onStatus("Installing voice files…")
+                if (staging.exists()) staging.deleteRecursively()
+                staging.mkdirs()
+                val stagingPath = staging.canonicalPath + File.separator
+                BZip2CompressorInputStream(BufferedInputStream(FileInputStream(archive))).use { bz ->
+                    TarArchiveInputStream(bz).use { tar ->
+                        var entry = tar.nextTarEntry
+                        while (entry != null) {
+                            val target = File(staging, entry.name).canonicalFile
+                            require(target.path.startsWith(stagingPath)) { "Unsafe model archive entry." }
+                            if (entry.isDirectory) {
+                                target.mkdirs()
+                            } else {
+                                target.parentFile?.mkdirs()
+                                FileOutputStream(target).use { output ->
+                                    val buffer = ByteArray(64 * 1024)
+                                    while (true) {
+                                        val count = tar.read(buffer)
+                                        if (count <= 0) break
+                                        output.write(buffer, 0, count)
+                                    }
+                                }
+                            }
+                            entry = tar.nextTarEntry
                         }
-                        entry = tar.nextTarEntry
                     }
                 }
+
+                val extractedModel = if (File(staging, "kitten-nano-en-v0_1-fp16").isDirectory) {
+                    File(staging, "kitten-nano-en-v0_1-fp16")
+                } else staging
+                val required = listOf("model.fp16.onnx", "voices.bin", "tokens.txt", "espeak-ng-data")
+                required.forEach { name ->
+                    val file = File(extractedModel, name)
+                    check(if (name == "espeak-ng-data") file.isDirectory else file.isFile && file.length() > 0L) {
+                        "Voice pack is missing $name."
+                    }
+                }
+                if (modelDir.exists()) modelDir.deleteRecursively()
+                check(extractedModel.renameTo(modelDir) || extractedModel.copyRecursively(modelDir, overwrite = true).exists()) {
+                    "Could not install offline model files."
+                }
+                check(isInstalled()) { "Installed voice pack failed validation." }
+                onStatus("Offline English voice pack installed. Tap Preview to hear a sample.")
+            } catch (error: Exception) {
+                onStatus("Offline model install failed: ${error.message ?: "unknown error"}")
+            } finally {
+                archive.delete()
+                staging.deleteRecursively()
             }
-            archive.delete()
-            check(isInstalled()) { "Downloaded voice pack is incomplete." }
-            onStatus("Offline English voice pack installed • 8 speakers ready.")
-        } catch (error: Exception) {
-            archive.delete()
-            onStatus("Offline model install failed: ${error.message ?: "unknown error"}")
-        }
+        }.start()
     }
 
-    fun speak(text: String, speakerId: Int, speed: Float = 1.0f, volume: Float = 1.0f, numThreads: Int = 2, onStatus: (String) -> Unit) {
+    fun stop() {
+        generationId++
+        val old = player
+        player = null
+        try { old?.stop() } catch (_: Exception) {}
+        try { old?.release() } catch (_: Exception) {}
+        playbackFile?.delete()
+        playbackFile = null
+    }
+
+    fun speak(
+        text: String,
+        speakerId: Int,
+        speed: Float = 1.0f,
+        volume: Float = 1.0f,
+        numThreads: Int = 2,
+        onStatus: (String) -> Unit
+    ) {
+        val requestId = ++generationId
         Thread {
             var tts: OfflineTts? = null
-            var track: AudioTrack? = null
             try {
                 if (!isInstalled()) {
-                    onStatus("Install the offline voice pack first.")
+                    onStatus("Offline voice pack is not installed. Open Offline and download it first.")
                     return@Thread
                 }
                 if (text.isBlank()) {
@@ -85,7 +139,7 @@ class OfflineKittenEngine(context: Context) {
                     return@Thread
                 }
 
-                onStatus("Generating speech offline…")
+                onStatus("Loading offline neural voice…")
                 val config = OfflineTtsConfig(
                     model = OfflineTtsModelConfig(
                         kitten = OfflineTtsKittenModelConfig(
@@ -101,85 +155,74 @@ class OfflineKittenEngine(context: Context) {
                     maxNumSentences = 1
                 )
                 tts = OfflineTts(config = config)
+                val modelRate = tts.sampleRate()
+                check(modelRate in 8000..48000) { "Offline model returned invalid sample rate: $modelRate Hz." }
+                check(tts.numSpeakers() <= 0 || speakerId in 0 until tts.numSpeakers()) {
+                    "Selected speaker is not available in this voice pack."
+                }
 
+                onStatus("Generating speech…")
                 val audio = tts.generate(
-                    text = text,
-                    sid = speakerId.coerceIn(0, 7),
+                    text = text.trim(),
+                    sid = speakerId.coerceAtLeast(0),
                     speed = speed.coerceIn(0.5f, 2.0f)
                 )
-                // Kitten Nano output rate is defined by the initialized model.
-                // Sherpa-ONNX 2.0.1 Android GeneratedAudio does not expose a reliable
-                // sampleRate field, so use model metadata as the authoritative rate.
-                val sampleRate = tts.sampleRate()
-                require(sampleRate in 8000..48000) {
-                    "Offline model reported unsupported sample rate: $sampleRate Hz."
-                }
-                require(audio.samples.isNotEmpty()) {
-                    "The voice model returned empty audio. Try different text."
+                check(audio.samples.isNotEmpty()) { "Voice model generated no audio samples." }
+                val peak = audio.samples.maxOf { kotlin.math.abs(it) }
+                check(peak > 0.0001f) { "Generated audio is silent (peak amplitude is zero)." }
+
+                val wav = File(appContext.cacheDir, "offline-speech-${requestId}.wav")
+                check(audio.save(wav.absolutePath)) { "Could not write generated WAV audio." }
+                check(wav.exists() && wav.length() > 44L) { "Generated WAV file is empty or invalid." }
+                if (requestId != generationId) {
+                    wav.delete()
+                    return@Thread
                 }
 
-                val pcm = ShortArray(audio.samples.size) { index ->
-                    val sample = audio.samples[index]
-                    (if (sample.isFinite()) sample.coerceIn(-1f, 1f) else 0f)
-                        .let { (it * Short.MAX_VALUE).toInt().toShort() }
-                }
-
-                val minBuffer = AudioTrack.getMinBufferSize(
-                    sampleRate,
-                    AudioFormat.CHANNEL_OUT_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT
+                val media = MediaPlayer()
+                media.setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
                 )
-                require(minBuffer > 0) { "This device does not support $sampleRate Hz mono PCM audio (code $minBuffer)." }
-
-                val bufferBytes = maxOf(minBuffer, 8192)
-                track = AudioTrack.Builder()
-                    .setAudioAttributes(
-                        AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_MEDIA)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                            .build()
-                    )
-                    .setAudioFormat(
-                        AudioFormat.Builder()
-                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                            .setSampleRate(sampleRate)
-                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                            .build()
-                    )
-                    .setBufferSizeInBytes(bufferBytes)
-                    .setTransferMode(AudioTrack.MODE_STREAM)
-                    .build()
-
-                check(track.state == AudioTrack.STATE_INITIALIZED) {
-                    "Audio output could not initialize. Try restarting the app or using another audio output."
+                media.setDataSource(wav.absolutePath)
+                media.setVolume(volume.coerceIn(0f, 1f), volume.coerceIn(0f, 1f))
+                media.setOnPreparedListener { prepared ->
+                    if (requestId != generationId) {
+                        prepared.release()
+                        wav.delete()
+                    } else {
+                        player = prepared
+                        playbackFile = wav
+                        onStatus("Playing offline voice · Speaker ${speakerId + 1} · ${modelRate} Hz")
+                        prepared.start()
+                    }
                 }
-
-                track.setVolume(volume.coerceIn(0f, 1f))
-                track.play()
-                var offset = 0
-                while (offset < pcm.size) {
-                    val count = minOf(4096, pcm.size - offset)
-                    val written = track.write(pcm, offset, count, AudioTrack.WRITE_BLOCKING)
-                    check(written > 0) { "Audio output write failed (code $written)." }
-                    offset += written
+                media.setOnCompletionListener { completed ->
+                    completed.release()
+                    if (player === completed) player = null
+                    wav.delete()
+                    if (playbackFile == wav) playbackFile = null
+                    if (requestId == generationId) onStatus("Speech finished.")
                 }
-
-                onStatus("Playing offline neural voice • Speaker ${speakerId + 1}")
-                val deadline = SystemClock.elapsedRealtime() +
-                    (pcm.size * 1000L / sampleRate) + 10000L
-                while (track.playbackHeadPosition.toLong() < pcm.size.toLong()) {
-                    check(SystemClock.elapsedRealtime() < deadline) { "Audio playback timed out." }
-                    SystemClock.sleep(25)
+                media.setOnErrorListener { failed, what, extra ->
+                    failed.release()
+                    if (player === failed) player = null
+                    wav.delete()
+                    if (playbackFile == wav) playbackFile = null
+                    if (requestId == generationId) onStatus("Offline audio playback error ($what/$extra).")
+                    true
                 }
-                onStatus("Offline speech finished.")
+                media.prepareAsync()
+                tts.release()
+                tts = null
             } catch (error: Exception) {
-                onStatus("Offline speech error: ${error.message ?: "unknown error"}")
+                if (requestId == generationId) {
+                    onStatus("Offline speech error: ${error.message ?: error.javaClass.simpleName}")
+                }
             } finally {
-                try { track?.pause() } catch (_: Exception) {}
-                try { track?.flush() } catch (_: Exception) {}
-                try { track?.stop() } catch (_: Exception) {}
-                track?.release()
-                tts?.release()
+                try { tts?.release() } catch (_: Exception) {}
             }
         }.start()
     }
