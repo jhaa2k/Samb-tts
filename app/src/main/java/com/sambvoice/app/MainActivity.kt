@@ -71,7 +71,6 @@ class MainActivity : ComponentActivity() {
             var notice by remember { mutableStateOf("Ready") }
             var offlineInstalled by remember { mutableStateOf(offlineEngine.isInstalled()) }
             var installing by remember { mutableStateOf(false) }
-            val prefs = remember { getSharedPreferences("voice_settings", MODE_PRIVATE) }
             var speechSpeed by remember { mutableStateOf(prefs.getFloat("speech_speed", 1.0f)) }
             var outputVolume by remember { mutableStateOf(prefs.getFloat("output_volume", 1.0f)) }
             var offlineThreads by remember { mutableStateOf(prefs.getInt("offline_threads", 2).coerceIn(1, 4)) }
