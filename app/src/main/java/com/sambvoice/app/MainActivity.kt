@@ -11,6 +11,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.RecordVoiceOver
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -88,7 +93,19 @@ class MainActivity : ComponentActivity() {
                                 NavigationBarItem(
                                     selected = screen == item,
                                     onClick = { screen = item },
-                                    icon = { Text(when (item) { AppScreen.STUDIO -> "01"; AppScreen.VOICES -> "02"; AppScreen.OFFLINE -> "03"; AppScreen.SETTINGS -> "04" }, fontSize = 10.sp, fontWeight = FontWeight.Bold) },
+                                    icon = {
+                                        val navIcon = when (item) {
+                                            AppScreen.STUDIO -> Icons.Outlined.Edit
+                                            AppScreen.VOICES -> Icons.Outlined.RecordVoiceOver
+                                            AppScreen.OFFLINE -> Icons.Outlined.Download
+                                            AppScreen.SETTINGS -> Icons.Outlined.Settings
+                                        }
+                                        Icon(
+                                            imageVector = navIcon,
+                                            contentDescription = item.label,
+                                            tint = if (screen == item) scheme.primary else scheme.onSurfaceVariant
+                                        )
+                                    },
                                     label = { Text(item.label, fontSize = 11.sp) },
                                     alwaysShowLabel = true
                                 )
