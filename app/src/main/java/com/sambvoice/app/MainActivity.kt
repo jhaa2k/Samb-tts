@@ -142,7 +142,7 @@ class MainActivity : ComponentActivity() {
                                         value = input, onValueChange = { input = it },
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 170.dp),
                                         label = { Text("Text to speech") },
-                                        placeholder = { Text("Type English, Odia or Sambalpuri text…") },
+                                        placeholder = { Text(if (provider == "offline") "Type English text for the installed offline voice…" else "Type text for speech generation…") },
                                         minLines = 5
                                     )
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
