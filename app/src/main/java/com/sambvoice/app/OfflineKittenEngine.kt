@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import android.os.SystemClock
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsKittenModelConfig
@@ -52,9 +53,8 @@ class OfflineKittenEngine(context: Context) {
                     while (entry != null) {
                         val target = File(root, entry.name).canonicalFile
                         require(target.path.startsWith(rootPath)) { "Unsafe model archive entry." }
-                        if (entry.isDirectory) {
-                            target.mkdirs()
-                        } else {
+                        if (entry.isDirectory) target.mkdirs()
+                        else {
                             target.parentFile?.mkdirs()
                             FileOutputStream(target).use { output -> tar.copyTo(output) }
                         }
@@ -64,7 +64,7 @@ class OfflineKittenEngine(context: Context) {
             }
             archive.delete()
             check(isInstalled()) { "Downloaded voice pack is incomplete." }
-            onStatus("Offline English voice pack installed • 8 voices ready.")
+            onStatus("Offline English voice pack installed • 8 speakers ready.")
         } catch (error: Exception) {
             archive.delete()
             onStatus("Offline model install failed: ${error.message ?: "unknown error"}")
@@ -84,6 +84,7 @@ class OfflineKittenEngine(context: Context) {
                     onStatus("Enter text before generating speech.")
                     return@Thread
                 }
+
                 onStatus("Generating speech offline…")
                 val config = OfflineTtsConfig(
                     model = OfflineTtsModelConfig(
@@ -100,16 +101,29 @@ class OfflineKittenEngine(context: Context) {
                     maxNumSentences = 1
                 )
                 tts = OfflineTts(config = config)
-                val audio = tts.generate(text = text, sid = speakerId.coerceIn(0, 7), speed = speed)
+
+                val audio = tts.generate(
+                    text = text,
+                    sid = speakerId.coerceIn(0, 7),
+                    speed = speed.coerceIn(0.5f, 2.0f)
+                )
+                require(audio.sampleRate > 0) { "The voice model returned an invalid sample rate." }
+                require(audio.samples.isNotEmpty()) { "The voice model returned empty audio. Try different text." }
+
                 val pcm = ShortArray(audio.samples.size) { index ->
-                    (audio.samples[index].coerceIn(-1f, 1f) * Short.MAX_VALUE).toInt().toShort()
+                    val sample = audio.samples[index]
+                    (if (sample.isFinite()) sample.coerceIn(-1f, 1f) else 0f)
+                        .let { (it * Short.MAX_VALUE).toInt().toShort() }
                 }
-                val bytes = ByteArray(pcm.size * 2)
-                for (i in pcm.indices) {
-                    val value = pcm[i].toInt()
-                    bytes[i * 2] = (value and 0xff).toByte()
-                    bytes[i * 2 + 1] = ((value shr 8) and 0xff).toByte()
-                }
+
+                val minBuffer = AudioTrack.getMinBufferSize(
+                    audio.sampleRate,
+                    AudioFormat.CHANNEL_OUT_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT
+                )
+                require(minBuffer > 0) { "This device does not support undefined Hz mono PCM audio (code $minBuffer)." }
+
+                val bufferBytes = maxOf(minBuffer, 8192)
                 track = AudioTrack.Builder()
                     .setAudioAttributes(
                         AudioAttributes.Builder()
@@ -124,18 +138,36 @@ class OfflineKittenEngine(context: Context) {
                             .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                             .build()
                     )
-                    .setBufferSizeInBytes(bytes.size.coerceAtLeast(4096))
-                    .setTransferMode(AudioTrack.MODE_STATIC)
+                    .setBufferSizeInBytes(bufferBytes)
+                    .setTransferMode(AudioTrack.MODE_STREAM)
                     .build()
-                track.write(bytes, 0, bytes.size)
-                onStatus("Playing offline neural voice • Speaker ${speakerId + 1}")
+
+                check(track.state == AudioTrack.STATE_INITIALIZED) {
+                    "Audio output could not initialize. Try restarting the app or using another audio output."
+                }
+
                 track.play()
-                val durationMs = (audio.samples.size * 1000L / audio.sampleRate).coerceAtLeast(500L)
-                Thread.sleep(durationMs + 150L)
+                var offset = 0
+                while (offset < pcm.size) {
+                    val count = minOf(4096, pcm.size - offset)
+                    val written = track.write(pcm, offset, count, AudioTrack.WRITE_BLOCKING)
+                    check(written > 0) { "Audio output write failed (code $written)." }
+                    offset += written
+                }
+
+                onStatus("Playing offline neural voice • Speaker ${speakerId + 1}")
+                val deadline = SystemClock.elapsedRealtime() +
+                    (pcm.size * 1000L / audio.sampleRate) + 10000L
+                while (track.playbackHeadPosition.toLong() < pcm.size.toLong()) {
+                    check(SystemClock.elapsedRealtime() < deadline) { "Audio playback timed out." }
+                    SystemClock.sleep(25)
+                }
                 onStatus("Offline speech finished.")
             } catch (error: Exception) {
                 onStatus("Offline speech error: ${error.message ?: "unknown error"}")
             } finally {
+                try { track?.pause() } catch (_: Exception) {}
+                try { track?.flush() } catch (_: Exception) {}
                 try { track?.stop() } catch (_: Exception) {}
                 track?.release()
                 tts?.release()
