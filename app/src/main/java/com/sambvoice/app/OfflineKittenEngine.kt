@@ -94,7 +94,12 @@ class OfflineKittenEngine(context: Context) {
                     }
                 }
                 if (modelDir.exists()) modelDir.deleteRecursively()
-                check(extractedModel.renameTo(modelDir) || extractedModel.copyRecursively(modelDir, overwrite = true).exists()) {
+                val installed = if (extractedModel.renameTo(modelDir)) {
+                    true
+                } else {
+                    extractedModel.copyRecursively(modelDir, overwrite = true)
+                }
+                check(installed) {
                     "Could not install offline model files."
                 }
                 check(isInstalled()) { "Installed voice pack failed validation." }
