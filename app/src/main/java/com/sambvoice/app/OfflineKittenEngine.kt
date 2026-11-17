@@ -32,7 +32,7 @@ class OfflineKittenEngine(context: Context) {
         File(modelDir, "model.fp16.onnx").let { it.isFile && it.length() > 0L } &&
             File(modelDir, "voices.bin").let { it.isFile && it.length() > 0L } &&
             File(modelDir, "tokens.txt").let { it.isFile && it.length() > 0L } &&
-            File(modelDir, "espeak-ng-data").isDirectory
+            File(modelDir, "lexicon-en-us.txt").let { it.isFile && it.length() > 0L }
 
     fun install(onStatus: (String) -> Unit) {
         Thread {
