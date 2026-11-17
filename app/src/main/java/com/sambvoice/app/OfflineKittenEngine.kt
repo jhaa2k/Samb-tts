@@ -71,7 +71,7 @@ class OfflineKittenEngine(context: Context) {
         }
     }
 
-    fun speak(text: String, speakerId: Int, speed: Float = 1.0f, onStatus: (String) -> Unit) {
+    fun speak(text: String, speakerId: Int, speed: Float = 1.0f, volume: Float = 1.0f, numThreads: Int = 2, onStatus: (String) -> Unit) {
         Thread {
             var tts: OfflineTts? = null
             var track: AudioTrack? = null
@@ -94,7 +94,7 @@ class OfflineKittenEngine(context: Context) {
                             tokens = File(modelDir, "tokens.txt").absolutePath,
                             dataDir = File(modelDir, "espeak-ng-data").absolutePath
                         ),
-                        numThreads = 2,
+                        numThreads = numThreads.coerceIn(1, 4),
                         debug = false,
                         provider = "cpu"
                     ),
@@ -107,14 +107,12 @@ class OfflineKittenEngine(context: Context) {
                     sid = speakerId.coerceIn(0, 7),
                     speed = speed.coerceIn(0.5f, 2.0f)
                 )
-                // Use the initialized model's metadata as the authoritative rate.
-                // GeneratedAudio.sampleRate may be invalid in some Android bindings.
+                // Kitten Nano output rate is defined by the initialized model.
+                // Sherpa-ONNX 2.0.1 Android GeneratedAudio does not expose a reliable
+                // sampleRate field, so use model metadata as the authoritative rate.
                 val sampleRate = tts.sampleRate()
                 require(sampleRate in 8000..48000) {
                     "Offline model reported unsupported sample rate: $sampleRate Hz."
-                }
-                require(audio.sampleRate == sampleRate) {
-                    "Generated audio rate (undefined Hz) does not match model rate ($sampleRate Hz)."
                 }
                 require(audio.samples.isNotEmpty()) {
                     "The voice model returned empty audio. Try different text."
@@ -131,7 +129,7 @@ class OfflineKittenEngine(context: Context) {
                     AudioFormat.CHANNEL_OUT_MONO,
                     AudioFormat.ENCODING_PCM_16BIT
                 )
-                require(minBuffer > 0) { "This device does not support undefined Hz mono PCM audio (code $minBuffer)." }
+                require(minBuffer > 0) { "This device does not support $sampleRate Hz mono PCM audio (code $minBuffer)." }
 
                 val bufferBytes = maxOf(minBuffer, 8192)
                 track = AudioTrack.Builder()
@@ -156,6 +154,7 @@ class OfflineKittenEngine(context: Context) {
                     "Audio output could not initialize. Try restarting the app or using another audio output."
                 }
 
+                track.setVolume(volume.coerceIn(0f, 1f))
                 track.play()
                 var offset = 0
                 while (offset < pcm.size) {
