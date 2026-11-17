@@ -173,6 +173,8 @@ class OfflineKittenEngine(context: Context) {
                     speed = speed.coerceIn(0.5f, 2.0f)
                 )
                 check(audio.samples.isNotEmpty()) { "Voice model generated no audio samples." }
+                val outputRate = audio.sampleRate
+                check(outputRate in 8000..48000) { "Generated audio returned an invalid sample rate: $outputRate Hz." }
                 val peak = audio.samples.maxOf { kotlin.math.abs(it) }
                 check(peak > 0.0001f) { "Generated audio is silent (peak amplitude is zero)." }
 
@@ -180,7 +182,7 @@ class OfflineKittenEngine(context: Context) {
                     (audio.samples[index].coerceIn(-1.0f, 1.0f) * 32767.0f).toInt().toShort()
                 }
                 val minBuffer = AudioTrack.getMinBufferSize(
-                    modelRate,
+                    outputRate,
                     AudioFormat.CHANNEL_OUT_MONO,
                     AudioFormat.ENCODING_PCM_16BIT
                 )
@@ -194,7 +196,7 @@ class OfflineKittenEngine(context: Context) {
                     )
                     .setAudioFormat(
                         AudioFormat.Builder()
-                            .setSampleRate(modelRate)
+                            .setSampleRate(outputRate)
                             .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                             .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                             .build()
@@ -212,7 +214,7 @@ class OfflineKittenEngine(context: Context) {
                 }
                 player = track
                 track.setVolume(volume.coerceIn(0f, 1f))
-                onStatus("Playing offline voice at ${modelRate} Hz")
+                onStatus("Playing offline voice at ${outputRate} Hz")
                 track.play()
                 var offset = 0
                 while (offset < pcm.size && requestId == generationId) {
