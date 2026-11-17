@@ -64,7 +64,7 @@ class MainActivity : ComponentActivity() {
             var screen by remember { mutableStateOf(AppScreen.STUDIO) }
             val prefs = remember { getSharedPreferences("voice_settings", MODE_PRIVATE) }
             var input by remember { mutableStateOf(sharedText) }
-            var provider by remember { mutableStateOf(if (prefs.getString("default_engine", "online") == "offline") "offline" else (prefs.getString("default_provider", "openai") ?: "openai")) }
+            var provider by remember { mutableStateOf(if (prefs.getString("default_engine", "offline") == "offline") "offline" else (prefs.getString("default_provider", "openai") ?: "openai")) }
             var selectedVoice by remember { mutableStateOf(prefs.getString("selected_voice", "coral") ?: "coral") }
             var elevenVoiceId by remember { mutableStateOf(prefs.getString("eleven_voice_id", "") ?: "") }
             var serverUrl by remember { mutableStateOf(prefs.getString("server_url", "") ?: "") }
@@ -74,7 +74,7 @@ class MainActivity : ComponentActivity() {
             var speechSpeed by remember { mutableStateOf(prefs.getFloat("speech_speed", 1.0f)) }
             var outputVolume by remember { mutableStateOf(prefs.getFloat("output_volume", 1.0f)) }
             var offlineThreads by remember { mutableStateOf(prefs.getInt("offline_threads", 2).coerceIn(1, 4)) }
-            var defaultEngine by remember { mutableStateOf(prefs.getString("default_engine", "online") ?: "online") }
+            var defaultEngine by remember { mutableStateOf(prefs.getString("default_engine", "offline") ?: "offline") }
             var autoStop by remember { mutableStateOf(prefs.getBoolean("stop_before_generate", true)) }
 
             LaunchedEffect(sharedText) { if (sharedText.isNotBlank()) input = sharedText }
@@ -147,7 +147,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         OutlinedButton(onClick = { input = "" }, modifier = Modifier.weight(1f)) { Text("Clear") }
-                                        OutlinedButton(onClick = { if (provider == "offline") { provider = "openai"; selectedVoice = "coral" }; screen = AppScreen.VOICES }, modifier = Modifier.weight(1f)) { Text("Choose voice") }
+                                        OutlinedButton(onClick = { screen = AppScreen.VOICES }, modifier = Modifier.weight(1f)) { Text("Choose voice") }
                                     }
                                     Text("ENGINE", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -228,8 +228,10 @@ class MainActivity : ComponentActivity() {
                                         VoiceRow(voice.name, voice.style, selectedVoice == voice.name, "Preview") {
                                             provider = "offline"
                                             selectedVoice = voice.name
-                                            if (offlineInstalled) offlineEngine.speak("Hello! This is an offline voice sample.", voice.speakerId) { s -> runOnUiThread { notice = s } }
-                                            else notice = "Download the voice pack first."
+                                            if (offlineInstalled) {
+                                                stopPlayback()
+                                                offlineEngine.speak("Hello! This is an offline voice sample.", voice.speakerId, speechSpeed, outputVolume, offlineThreads) { s -> runOnUiThread { notice = s } }
+                                            } else notice = "Download the voice pack first."
                                         }
                                     }
                                     Text("Language note: these are English speaker IDs, not native Sambalpuri or Odia voices.", color = scheme.onSurfaceVariant, fontSize = 12.sp)
@@ -268,8 +270,8 @@ class MainActivity : ComponentActivity() {
                                         Switch(checked = autoStop, onCheckedChange = { autoStop = it; prefs.edit().putBoolean("stop_before_generate", it).apply() })
                                     }
                                     OutlinedButton(onClick = {
-                                        speechSpeed = 1f; outputVolume = 1f; offlineThreads = 2; defaultEngine = "online"; autoStop = true
-                                        prefs.edit().putFloat("speech_speed", 1f).putFloat("output_volume", 1f).putInt("offline_threads", 2).putString("default_engine", "online").putBoolean("stop_before_generate", true).apply()
+                                        speechSpeed = 1f; outputVolume = 1f; offlineThreads = 2; defaultEngine = "offline"; provider = "offline"; autoStop = true
+                                        prefs.edit().putFloat("speech_speed", 1f).putFloat("output_volume", 1f).putInt("offline_threads", 2).putString("default_engine", "offline").putBoolean("stop_before_generate", true).apply()
                                         notice = "Settings reset to defaults."
                                     }, modifier = Modifier.fillMaxWidth()) { Text("RESET SETTINGS") }
                                     Divider(color = scheme.surfaceVariant)
@@ -290,8 +292,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun stopPlayback() {
-        onlinePlayer?.let { runCatching { it.stop() }; it.release() }
+        onlinePlayer?.let { runCatching { it.stop() }; runCatching { it.release() } }
         onlinePlayer = null
+        if (::offlineEngine.isInitialized) offlineEngine.stop()
     }
 
     private fun speakOnline(text: String, provider: String, voice: String, baseUrl: String, speed: Float = 1.0f, volume: Float = 1.0f, onStatus: (String) -> Unit) {
