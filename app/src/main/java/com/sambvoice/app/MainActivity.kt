@@ -65,7 +65,7 @@ class MainActivity : ComponentActivity() {
             val prefs = remember { getSharedPreferences("voice_settings", MODE_PRIVATE) }
             var input by remember { mutableStateOf(sharedText) }
             var provider by remember { mutableStateOf(if (prefs.getString("default_engine", "offline") == "offline") "offline" else (prefs.getString("default_provider", "openai") ?: "openai")) }
-            var selectedVoice by remember { mutableStateOf(prefs.getString("selected_voice", "coral") ?: "coral") }
+            var selectedVoice by remember { mutableStateOf(prefs.getString("selected_voice", if (provider == "offline") "Speaker 1" else "coral") ?: if (provider == "offline") "Speaker 1" else "coral") }
             var elevenVoiceId by remember { mutableStateOf(prefs.getString("eleven_voice_id", "") ?: "") }
             var serverUrl by remember { mutableStateOf(prefs.getString("server_url", "") ?: "") }
             var notice by remember { mutableStateOf("Ready") }
