@@ -303,7 +303,7 @@ class MainActivity : ComponentActivity() {
                                     Text("AUDIO ENGINE NOTES", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                                     Text("Offline sample rate is fixed by the Kitten Nano model (24 kHz). Pitch control and native Sambalpuri pronunciation are not supported by this English-only model.", color = scheme.onSurfaceVariant, fontSize = 12.sp)
                                     Text("ABOUT", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                                    Text("Sambalpuri Voice · 0.2.0", color = scheme.onSurface, fontWeight = FontWeight.SemiBold)
+                                    Text("Sambalpuri Voice · 0.4.0", color = scheme.onSurface, fontWeight = FontWeight.SemiBold)
                                     Text("No Android System TTS fallback. Offline Kitten Nano is English-only. Native Sambalpuri speech needs a dedicated trained model.", color = scheme.onSurfaceVariant, fontSize = 12.sp)
                                     OutlinedButton(onClick = { stopPlayback(); notice = "Playback stopped." }, modifier = Modifier.fillMaxWidth()) { Text("STOP ALL PLAYBACK") }
                                     StatusCard(notice)
