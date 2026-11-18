@@ -65,7 +65,7 @@ class MainActivity : ComponentActivity() {
             val prefs = remember { getSharedPreferences("voice_settings", MODE_PRIVATE) }
             var input by remember { mutableStateOf(sharedText) }
             var provider by remember { mutableStateOf(if (prefs.getString("server_url", "").isNullOrBlank() || prefs.getString("default_engine", "offline") == "offline") "offline" else (prefs.getString("default_provider", "openai") ?: "openai")) }
-            var selectedVoice by remember { mutableStateOf(prefs.getString("selected_voice", if (provider == "offline") "Speaker 1" else "coral") ?: if (provider == "offline") "Speaker 1" else "coral") }
+            var selectedVoice by remember { mutableStateOf(prefs.getString("selected_voice", when (provider) { "offline" -> "Speaker 1"; "indicf5" -> "reference"; else -> "coral" }) ?: when (provider) { "offline" -> "Speaker 1"; "indicf5" -> "reference"; else -> "coral" }) }
             var elevenVoiceId by remember { mutableStateOf(prefs.getString("eleven_voice_id", "") ?: "") }
             var serverUrl by remember { mutableStateOf(prefs.getString("server_url", "") ?: "") }
             var notice by remember { mutableStateOf("Ready") }
@@ -142,7 +142,7 @@ class MainActivity : ComponentActivity() {
                                         value = input, onValueChange = { input = it },
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 170.dp),
                                         label = { Text("Text to speech") },
-                                        placeholder = { Text(if (provider == "offline") "Type English text for the installed offline voice…" else "Type text for speech generation…") },
+                                        placeholder = { Text(when (provider) { "offline" -> "Type English text for the installed offline voice…"; "indicf5" -> "Type Sambalpuri in Roman or Odia script…"; else -> "Type text for speech generation…" }) },
                                         minLines = 5
                                     )
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -165,7 +165,7 @@ class MainActivity : ComponentActivity() {
                                                     offlineEngine.speak(input, voice.speakerId, speechSpeed, outputVolume, offlineThreads) { s -> runOnUiThread { notice = s } }
                                                 }
                                             } else {
-                                                val voice = if (provider == "elevenlabs") elevenVoiceId.trim() else selectedVoice
+                                                val voice = when (provider) { "elevenlabs" -> elevenVoiceId.trim(); "indicf5" -> "reference"; else -> selectedVoice }
                                                 if (voice.isBlank()) notice = "Enter an ElevenLabs voice ID in Voices."
                                                 else speakOnline(input, provider, voice, serverUrl, speechSpeed, outputVolume) { s -> runOnUiThread { notice = s } }
                                             }
@@ -196,7 +196,14 @@ class MainActivity : ComponentActivity() {
                                         ModeButton("OpenAI", provider == "openai", Modifier.weight(1f)) { provider = "openai" }
                                         ModeButton("ElevenLabs", provider == "elevenlabs", Modifier.weight(1f)) { provider = "elevenlabs" }
                                     }
-                                    if (provider == "openai") {
+                                    if (provider == "indicf5") {
+                                        InfoCard("INDICF5 · SAMBALPURI TEST", "Uses an approved reference recording to guide the voice. IndicF5 supports Odia, but is not a native Sambalpuri model. Roman text is transliterated to Odia when the optional transliteration package is installed.")
+                                        VoiceRow("Reference speaker", "IndicF5 · 24 kHz WAV", selectedVoice == "reference", "Preview") {
+                                            selectedVoice = "reference"
+                                            prefs.edit().putString("selected_voice", "reference").apply()
+                                            speakOnline("ନମସ୍କାର। ମୁଇଁ ସମ୍ବଲପୁରୀ ଭାଷାରେ କଥା ହେଉଛେଁ।", "indicf5", "reference", serverUrl) { s -> runOnUiThread { notice = s } }
+                                        }
+                                    } else if (provider == "openai") {
                                         onlineVoices.forEach { voice ->
                                             VoiceRow(voice.name, voice.style, selectedVoice == voice.voiceId, "Preview") {
                                                 selectedVoice = voice.voiceId
@@ -272,7 +279,7 @@ class MainActivity : ComponentActivity() {
                                         placeholder = { Text("https://your-engine.example.com") },
                                         singleLine = true
                                     )
-                                    Text("Online providers: OpenAI and ElevenLabs. Configure OPENAI_API_KEY and ELEVENLABS_API_KEY on your server.", color = scheme.onSurfaceVariant, fontSize = 12.sp)
+                                    Text("Online providers: OpenAI, ElevenLabs and optional IndicF5. Configure provider credentials and reference audio on your server.", color = scheme.onSurfaceVariant, fontSize = 12.sp)
                                     Divider(color = scheme.surfaceVariant)
                                     Text("DEFAULT ENGINE", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -283,6 +290,7 @@ class MainActivity : ComponentActivity() {
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         ModeButton("OPENAI", provider == "openai", Modifier.weight(1f)) { provider = "openai"; prefs.edit().putString("default_provider", "openai").apply() }
                                         ModeButton("ELEVENLABS", provider == "elevenlabs", Modifier.weight(1f)) { provider = "elevenlabs"; prefs.edit().putString("default_provider", "elevenlabs").apply() }
+                                        ModeButton("INDICF5", provider == "indicf5", Modifier.weight(1f)) { provider = "indicf5"; selectedVoice = "reference"; prefs.edit().putString("selected_voice", "reference").putString("default_provider", "indicf5").apply() }
                                     }
                                     Text("SPEECH SPEED · " + "%.2f".format(speechSpeed) + "×", color = scheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                     Slider(value = speechSpeed, onValueChange = { speechSpeed = it; prefs.edit().putFloat("speech_speed", it).apply() }, valueRange = 0.5f..2.0f)
@@ -341,7 +349,7 @@ class MainActivity : ComponentActivity() {
                     val error = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
                     throw IllegalStateException("Engine HTTP $code: ${error.take(200)}")
                 }
-                val audioFile = File(cacheDir, "voice-output.mp3")
+                val audioFile = File(cacheDir, if (provider == "indicf5") "voice-output.wav" else "voice-output.mp3")
                 connection.inputStream.use { input -> audioFile.outputStream().use { output -> input.copyTo(output) } }
                 connection.disconnect()
                 runOnUiThread {
