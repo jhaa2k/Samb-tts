@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 app = FastAPI(
     title="Sambalpuri Voice Engine",
-    version="0.2.0",
+    version="0.3.0",
     description="Online speech provider gateway. API credentials stay on the server.",
 )
 
@@ -31,10 +31,21 @@ OPENAI_VOICES = [
 
 class SynthesisRequest(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
-    provider: Literal["openai", "elevenlabs"]
+    provider: Literal["openai", "elevenlabs", "indicf5"]
     voice: str = Field(min_length=1, max_length=160)
     speed: float = Field(default=1.0, ge=0.7, le=1.3)
     style: str = Field(default="Speak naturally and clearly.", max_length=500)
+
+
+def indicf5_status():
+    reference_path = os.getenv("INDICF5_REF_AUDIO", "reference/ref.wav")
+    return {
+        "enabled": bool(os.getenv("HF_TOKEN")),
+        "model": os.getenv("INDICF5_MODEL_ID", "ai4bharat/IndicF5"),
+        "reference_audio_present": os.path.isfile(reference_path),
+        "reference_transcript_present": bool(os.getenv("INDICF5_REF_TEXT", "").strip()),
+        "sample_rate": 24000,
+    }
 
 
 @app.get("/health")
@@ -44,14 +55,29 @@ def health():
         "providers": {
             "openai": bool(os.getenv("OPENAI_API_KEY")),
             "elevenlabs": bool(os.getenv("ELEVENLABS_API_KEY")),
+            "indicf5": indicf5_status(),
         },
         "offline_runtime": "Android Sherpa-ONNX module",
         "native_sambalpuri_model": False,
+        "note": "IndicF5 supports Odia, not a separately trained Sambalpuri language model.",
     }
 
 
 @app.get("/v1/voices")
-async def list_voices(provider: Literal["openai", "elevenlabs"]):
+async def list_voices(provider: Literal["openai", "elevenlabs", "indicf5"]):
+    if provider == "indicf5":
+        status = indicf5_status()
+        if not status["enabled"]:
+            raise HTTPException(503, "HF_TOKEN is not configured. Accept the IndicF5 model conditions and add a Hugging Face access token.")
+        if not status["reference_audio_present"] or not status["reference_transcript_present"]:
+            raise HTTPException(503, "IndicF5 reference audio or its exact transcript is missing.")
+        return {
+            "provider": "indicf5",
+            "voices": [{"id": "reference", "name": "Reference speaker", "style": "Voice guided by your consented reference recording"}],
+            "format": "wav",
+            "sample_rate": 24000,
+        }
+
     if provider == "openai":
         if not os.getenv("OPENAI_API_KEY"):
             raise HTTPException(503, "OPENAI_API_KEY is not configured on the server.")
@@ -85,6 +111,30 @@ async def list_voices(provider: Literal["openai", "elevenlabs"]):
 async def synthesize(request: SynthesisRequest):
     if not request.text.strip():
         raise HTTPException(400, "Text cannot be empty.")
+
+    if request.provider == "indicf5":
+        status = indicf5_status()
+        if not status["enabled"]:
+            raise HTTPException(503, "HF_TOKEN is missing. Accept the IndicF5 model conditions on Hugging Face and configure the token on the server.")
+        if not status["reference_audio_present"]:
+            raise HTTPException(503, "IndicF5 reference audio is missing. Add your consented 5–10 second recording as engine/reference/ref.wav.")
+        if not status["reference_transcript_present"]:
+            raise HTTPException(503, "INDICF5_REF_TEXT is missing. It must exactly match the words spoken in the reference recording.")
+        try:
+            import asyncio
+            from indicf5_engine import synthesize_wav
+
+            audio_bytes = await asyncio.to_thread(synthesize_wav, request.text)
+        except ImportError as exc:
+            raise HTTPException(503, "IndicF5 runtime is not installed. Install engine/requirements-indicf5.txt on a machine with sufficient RAM.") from exc
+        except Exception as exc:
+            # Keep private paths, access tokens and upstream internals out of API responses.
+            raise HTTPException(502, f"IndicF5 generation failed: {type(exc).__name__}. Check model access, reference audio and server logs.") from exc
+        return Response(
+            content=audio_bytes,
+            media_type="audio/wav",
+            headers={"Cache-Control": "no-store", "X-Audio-Sample-Rate": "24000"},
+        )
 
     if request.provider == "openai":
         key = os.getenv("OPENAI_API_KEY")
