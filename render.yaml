@@ -11,3 +11,7 @@ services:
         sync: false
       - key: ELEVENLABS_API_KEY
         sync: false
+      - key: HF_TOKEN
+        sync: false
+      - key: INDICF5_REF_TEXT
+        sync: false
