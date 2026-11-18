@@ -77,3 +77,16 @@ IndicF5 requires three inputs: synthesis text, reference audio, and the exact re
 ## Existing providers
 
 Configure `OPENAI_API_KEY` and/or `ELEVENLABS_API_KEY` in the hosting dashboard. Do not put provider keys in the Android app, GitHub source files, or public issue comments. Provider usage may incur charges and is subject to account limits and terms.
+
+
+## Balangiri (Balangir–Subarnapur) dialect profile
+
+The active starter lexicon includes three documented Bolangir/Balangiri-specific forms:
+
+| Meaning | Roman input | Odia-script form |
+|---|---|---|
+| no / not | `ni` | `ନି` |
+| now | `ekhen` | `ଏଖେନ` |
+| to run | `nardiba` | `ନରଡିବା` |
+
+See [`balangiri_dialect_profile.json`](balangiri_dialect_profile.json) for regional contrasts and source notes. These are documented regional distinctions, not a complete Balangiri dictionary. The broader Sambalpuri lexicon remains the fallback for other words; IndicXlit supplies Odia-script transliteration, not dialect translation. A full and reliable Balangiri vocabulary, grammar and phrase bank needs native-speaker review, especially for village-level pronunciation and spelling variants.
