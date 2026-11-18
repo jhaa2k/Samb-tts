@@ -1,0 +1,39 @@
+{
+  "profile_name": "Balangiri / Bolangiri Sambalpuri",
+  "region": "Balangir district, western Odisha",
+  "script": "Odia script for stored pronunciation forms; Roman input accepted by transliteration layer",
+  "status": "starter dialect profile; not a complete dictionary",
+  "documented_differences": [
+    {
+      "meaning": "no / not",
+      "balangiri_roman": "ni",
+      "odia_script": "ନି",
+      "contrast": "Bargarh and Sambalpur varieties are reported with nuhe/nihe forms",
+      "confidence": "documented regional distinction"
+    },
+    {
+      "meaning": "now",
+      "balangiri_roman": "ekhen",
+      "odia_script": "ଏଖେନ",
+      "contrast": "A published comparison reports ekhen for the Bolangir variety; other districts use different forms",
+      "confidence": "documented regional distinction; verify local spelling with speaker"
+    },
+    {
+      "meaning": "to run",
+      "balangiri_roman": "nardiba",
+      "odia_script": "ନରଡିବା",
+      "contrast": "A published comparison reports nardiba for Bolangir and Kalahandi, versus daudiba in general Sambalpuri and badkiba in Sundargarh",
+      "confidence": "documented regional distinction; verify local spelling with speaker"
+    }
+  ],
+  "implementation_notes": [
+    "Keep Balangiri forms as preferred variants for the Balangir profile.",
+    "Do not silently replace all Sambalpuri regional forms with Balangiri forms.",
+    "IndicXlit is Odia-script transliteration support, not a Sambalpuri translation model.",
+    "Expand vocabulary and phrase coverage only with native-speaker validation; village-level forms can differ."
+  ],
+  "sources": [
+    "Issues and Challenges in Developing Statistical POS Taggers for Sambalpuri (2015)",
+    "Negation in Sambalpuri: A Typological Study, Language in India (2023)"
+  ]
+}
