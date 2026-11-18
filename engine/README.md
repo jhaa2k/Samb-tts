@@ -90,3 +90,10 @@ The active starter lexicon includes three documented Bolangir/Balangiri-specific
 | to run | `nardiba` | `ନରଡିବା` |
 
 See [`balangiri_dialect_profile.json`](balangiri_dialect_profile.json) for regional contrasts and source notes. These are documented regional distinctions, not a complete Balangiri dictionary. The broader Sambalpuri lexicon remains the fallback for other words; IndicXlit supplies Odia-script transliteration, not dialect translation. A full and reliable Balangiri vocabulary, grammar and phrase bank needs native-speaker review, especially for village-level pronunciation and spelling variants.
+
+
+### Kantabanji speech target
+
+The Balangiri profile is now scoped to **Kantabanji town and nearby villages**. The primary target is local Sambalpuri/Kosli, with natural Hindi, Odia and English code-switching preserved. Sadri, Halbi and Bhatri are listed as separate community-language profiles rather than being mixed into one Sambalpuri lexicon. The Balangir District Gazetteer identifies Sambalpuri as the district's western Odia variety and notes Hindi influence; a regional survey also lists several languages used in Balangir district. This describes the district's linguistic environment, not a claim that every Kantabanji resident speaks every listed language.
+
+The current profile is a configuration and documentation baseline, not a complete Kantabanji dictionary. Roman input still needs locally verified word forms, phrase examples, verb inflections and pronunciation recordings before it can reliably speak all local usage.
