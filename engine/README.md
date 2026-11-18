@@ -52,9 +52,9 @@ IndicF5 currently accepts Odia among its supported languages. Sambalpuri is not 
    - `HF_TOKEN` — Hugging Face read token.
    - `INDICF5_MODEL_ID` — optional; defaults to `ai4bharat/IndicF5`.
    - `INDICF5_REF_AUDIO` — optional path; defaults to `reference/ref.wav`.
-   - `INDICF5_REF_TEXT` — exact transcript of the reference recording.
+   - `INDICF5_REF_TEXT` — exact transcript of the reference recording.\n- `INDICF5_TRANSLITERATE_ROMAN` — defaults to `true`; converts Roman-letter input to Odia before inference.\n- `SAMBALPURI_LEXICON` — optional path to a custom JSON Roman-to-Odia word map.
 
-5. Put the speaker-approved reference WAV at `engine/reference/ref.wav` (or configure an absolute path). Use a clean, single-speaker recording, ideally 5–10 seconds, 24 kHz, mono. The transcript must match the recording exactly. Do not use anyone's voice without explicit permission.
+5. Put the speaker-approved reference WAV at `engine/reference/ref.wav` (or configure an absolute path). Use a clean, single-speaker recording, ideally 5–10 seconds, 24 kHz, mono. The transcript must match the recording exactly. Do not use anyone's voice without explicit permission.\n6. Roman-letter input is converted to Odia script using optional IndicXlit plus `engine/sambalpuri_lexicon.json` overrides. The starter lexicon only covers a few sample words; native speakers should review and expand it. Set `INDICF5_TRANSLITERATE_ROMAN=false` to disable automatic conversion.
 
 The reference audio is intentionally not included in this repository. Add it only after the speaker has provided informed consent. Keep private voice recordings out of public commits unless the speaker explicitly approves public distribution.
 
