@@ -1,5 +1,5 @@
 # Optional heavyweight runtime; install only on a host with sufficient RAM.
-# The normal requirements.txt deliberately excludes these packages.
 git+https://github.com/AI4Bharat/IndicF5.git
 transformers==4.50.0
+ai4bharat-transliteration
 soundfile
