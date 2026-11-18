@@ -195,6 +195,7 @@ class MainActivity : ComponentActivity() {
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         ModeButton("OpenAI", provider == "openai", Modifier.weight(1f)) { provider = "openai" }
                                         ModeButton("ElevenLabs", provider == "elevenlabs", Modifier.weight(1f)) { provider = "elevenlabs" }
+                                        ModeButton("IndicF5", provider == "indicf5", Modifier.weight(1f)) { provider = "indicf5"; selectedVoice = "reference"; prefs.edit().putString("selected_voice", "reference").putString("default_provider", "indicf5").apply() }
                                     }
                                     if (provider == "indicf5") {
                                         InfoCard("INDICF5 · SAMBALPURI TEST", "Uses an approved reference recording to guide the voice. IndicF5 supports Odia, but is not a native Sambalpuri model. Roman text is transliterated to Odia when the optional transliteration package is installed.")
@@ -342,7 +343,7 @@ class MainActivity : ComponentActivity() {
                     doOutput = true
                     setRequestProperty("Content-Type", "application/json")
                 }
-                val payload = JSONObject().put("text", text).put("provider", provider).put("voice", voice).put("speed", speed.coerceIn(0.5f, 2.0f).toDouble()).put("style", "Speak naturally and clearly.").toString()
+                val payload = JSONObject().put("text", text).put("provider", provider).put("voice", voice).put("speed", speed.coerceIn(0.7f, 1.3f).toDouble()).put("style", "Speak naturally and clearly.").toString()
                 connection.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
                 val code = connection.responseCode
                 if (code !in 200..299) {
