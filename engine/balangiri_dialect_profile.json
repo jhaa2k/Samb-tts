@@ -1,8 +1,8 @@
 {
-  "profile_name": "Balangiri / Bolangiri Sambalpuri",
-  "region": "Balangir district, western Odisha",
+  "profile_name": "Kantabanji local speech (Balangir district)",
+  "region": "Kantabanji town and nearby villages, Balangir district, western Odisha",
   "script": "Odia script for stored pronunciation forms; Roman input accepted by transliteration layer",
-  "status": "starter dialect profile; not a complete dictionary",
+  "status": "local speech-environment profile; vocabulary requires native-speaker validation",
   "documented_differences": [
     {
       "meaning": "no / not",
@@ -27,13 +27,55 @@
     }
   ],
   "implementation_notes": [
-    "Keep Balangiri forms as preferred variants for the Balangir profile.",
-    "Do not silently replace all Sambalpuri regional forms with Balangiri forms.",
-    "IndicXlit is Odia-script transliteration support, not a Sambalpuri translation model.",
-    "Expand vocabulary and phrase coverage only with native-speaker validation; village-level forms can differ."
+    "Default target is Kantabanji-area Sambalpuri/Kosli, not generic standard Odia.",
+    "Support natural Sambalpuri-Hindi-Odia-English code-switching without changing the words' language identity.",
+    "Keep Sadri, Halbi and Bhatri as separate language profiles; they are not synonyms for Kantabanji Sambalpuri.",
+    "Roman-to-Odia transliteration is only a script conversion step; it does not translate or guarantee local pronunciation.",
+    "Do not claim complete Kantabanji coverage until vocabulary, phrase bank, verb forms and pronunciation are checked by local speakers.",
+    "Collect examples from Kantabanji town and nearby villages because local usage can vary."
   ],
   "sources": [
-    "Issues and Challenges in Developing Statistical POS Taggers for Sambalpuri (2015)",
-    "Negation in Sambalpuri: A Typological Study, Language in India (2023)"
+    "Balangir District Gazetteer, Language section: Sambalpuri as the western variety of Odia and Hindi influence.",
+    "Dialogue, Volume 22 No. 1: Balangir language/dialect landscape includes Sambalpuri/Kosli, Odia, Hindi, Punjabi, Halbi, Bhatri and Sadri."
+  ],
+  "primary_speech": {
+    "name": "Kantabanji-area Sambalpuri / Kosli",
+    "priority": "primary",
+    "notes": "Use local Balangir-area Sambalpuri as the pronunciation base, including local lexical and grammatical forms. Do not replace it with standard coastal Odia."
+  },
+  "code_switching": [
+    {
+      "language": "Hindi",
+      "priority": "common conversational code-switch",
+      "handling": "Preserve Hindi words and phrases when the speaker uses them; do not force-transliterate them as Sambalpuri."
+    },
+    {
+      "language": "Odia",
+      "priority": "common alongside Sambalpuri",
+      "handling": "Support standard Odia words and sentences as a separate input style."
+    },
+    {
+      "language": "English",
+      "priority": "loanwords and modern terms",
+      "handling": "Retain English terms or apply user-selected pronunciation; do not assume every Roman word is English."
+    }
+  ],
+  "other_community_languages": [
+    {
+      "language": "Sadri",
+      "handling": "Keep as a separate language option/profile; do not merge its lexicon into Sambalpuri."
+    },
+    {
+      "language": "Halbi",
+      "handling": "Keep as a separate language option/profile; do not merge its lexicon into Sambalpuri."
+    },
+    {
+      "language": "Bhatri",
+      "handling": "Keep as a separate language option/profile; do not merge its lexicon into Sambalpuri."
+    },
+    {
+      "language": "Other tribal/community languages",
+      "handling": "Add only with a named language profile and native-speaker data."
+    }
   ]
 }
