@@ -153,7 +153,7 @@ def _word_to_odia(word: str, use_xlit: bool) -> str:
     if "'" in low and low.split("'")[0] in LEXICON:
         return LEXICON[low.split("'")[0]]
     # acronyms: TV, ATM, PM  -> letter names
-    if word.isupper() and 2 <= len(word) <= 5:
+    if word.isalpha() and word.isupper() and 2 <= len(word) <= 5:
         return " ".join(LETTER_NAMES[c] for c in low)
     if use_xlit:
         eng = _xlit_engine()
