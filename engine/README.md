@@ -1,58 +1,39 @@
-# Sambalpuri Voice Engine API
+# Sambalpuri Vaani - engine
 
-This FastAPI service provides online TTS adapters for OpenAI and ElevenLabs. Provider keys stay on the server and are never embedded in the Android APK.
+Pipeline: **normalize -> Odia-script transliteration -> IndicF5 (voice-conditioned) -> WAV/MP3**
 
-## Run locally
+## Honest limits
+- There is **no Sambalpuri TTS model**. This uses Odia TTS (IndicF5) + a reference clip of a
+  Sambalpuri speaker. Expect an approximation, not native Sambalpuri.
+- Transliteration is approximate. `lexicon.py` is the biggest quality lever: have a native
+  speaker review and extend it.
+- Output quality depends heavily on the reference clip (clean, 5-10 s, 24 kHz mono).
+- Use only voices you have explicit consent to use.
 
+## Setup (Python 3.10)
 ```bash
 cd engine
-python -m venv .venv
-source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
-# Add your own provider keys to .env before starting the server.
-set -a && source .env && set +a
-uvicorn app:app --host 0.0.0.0 --port 8000
+pip install git+https://github.com/ai4bharat/IndicF5.git
+huggingface-cli login            # ai4bharat/IndicF5 is a gated model: accept terms first
+pip install ai4bharat-transliteration   # optional; without it lexicon + rules are used
+sudo apt install ffmpeg          # only for MP3 output
+```
+Put `reference/ref.wav` + `reference/ref.txt` (exact Odia transcript). See `reference/README.md`.
+
+## Use
+```bash
+python cli.py "Doctor sir went to school at 10:30" -o out.mp3
+python cli.py "Hello bhai, मेरा नाम राम है" --dry-run        # just show the Odia text
+python cli.py -f story.txt --engine mms -o out.wav          # lighter fallback (fixed voice)
+uvicorn app:app --port 8000                                 # API: POST /v1/synthesize {"text": "..."}
 ```
 
-Open `/docs` for the API schema and `/health` to check which providers are configured.
+## Trade-offs
+| Engine  | Size | Speed (CPU) | Voice | Notes |
+|---------|------|-------------|-------|-------|
+| indicf5 | ~351M params | slow, GPU recommended | cloned from your reference | best accent control |
+| mms     | ~36M params | fast | one fixed voice | CC-BY-NC licence, no Sambalpuri voice |
 
-## Endpoints
-
-- `GET /health` — provider configuration status (never returns secret values).
-- `GET /v1/voices?provider=openai` — 13 built-in OpenAI voice IDs.
-- `GET /v1/voices?provider=elevenlabs` — voices available to the configured ElevenLabs account.
-- `POST /v1/synthesize` — returns generated MP3 audio.
-
-Example request:
-
-```json
-{
-  "text": "Hello. This is a voice sample.",
-  "provider": "openai",
-  "voice": "coral",
-  "speed": 1.0,
-  "style": "Speak naturally and clearly."
-}
-```
-
-## Deploy
-
-The repository includes a Render blueprint at the root. Create a new Render service from this repository and add `OPENAI_API_KEY` and/or `ELEVENLABS_API_KEY` as secret environment variables in the hosting dashboard. Then copy the deployed HTTPS service URL into the Android app's **Your hosted engine URL** field.
-
-Do not put provider keys in the Android app, GitHub source files, or public issue comments. Provider usage may incur charges and is subject to each provider's account limits and terms.
-
-## Offline Android engine
-
-The Android build downloads the official Sherpa-ONNX 2.0.1 AAR during GitHub Actions and packages the native runtime. The app can download the Kitten Nano English model on demand. It provides eight English speakers and works offline after installation. The model is English-only; it is not an Odia or Sambalpuri model.
-
-## Sambalpuri model status
-
-There is no verified native Sambalpuri model configured in this project. Do not present English, Hindi, or Odia model output as native Sambalpuri. A real Sambalpuri voice requires consented native-speaker recordings, aligned transcripts, a trained model, and evaluation by Sambalpuri speakers.
-
-## Voice-data ethics
-
-- Obtain explicit informed consent from every speaker.
-- Do not clone a person's voice without their permission.
-- Keep model licences and speaker consent records with the dataset.
-- Never scrape private chats or use private recordings.
+Numbers are spoken as English words (Indian style: lakh/crore). Odia number words are a
+possible later improvement.

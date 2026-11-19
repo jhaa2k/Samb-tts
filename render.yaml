@@ -1,13 +1,16 @@
+# NOTE: IndicF5 needs several GB of RAM and is slow on CPU; Render's free tier is too small.
+# Use a paid instance with enough RAM, or a GPU host. Set HF_TOKEN (access to the gated model)
+# and upload the reference clip into engine/reference/.
 services:
   - type: web
-    name: sambalpuri-voice-engine
+    name: sambalpuri-vaani-engine
     runtime: python
     rootDir: engine
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt && pip install git+https://github.com/ai4bharat/IndicF5.git
     startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
-      - key: OPENAI_API_KEY
+      - key: HF_TOKEN
         sync: false
-      - key: ELEVENLABS_API_KEY
-        sync: false
+      - key: SAMB_ENGINE
+        value: indicf5

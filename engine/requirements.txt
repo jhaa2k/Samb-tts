@@ -1,3 +1,13 @@
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-httpx==0.28.1
+# --- core ---
+numpy
+soundfile
+num2words
+# --- API (optional) ---
+fastapi
+uvicorn[standard]
+# --- TTS: follow the IndicF5 model card (Python 3.10, gated HF model: `huggingface-cli login`)
+# pip install git+https://github.com/ai4bharat/IndicF5.git
+transformers
+torch
+# --- transliteration (optional, heavy; lexicon + rules work without it) ---
+# ai4bharat-transliteration
