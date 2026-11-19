@@ -53,12 +53,14 @@ private val offlineVoices = (0..7).map { id ->
 class MainActivity : ComponentActivity() {
     private var sharedText by mutableStateOf("")
     private lateinit var offlineEngine: OfflineKittenEngine
+    private lateinit var odiaEngine: OfflineOdiaEngine
     private var onlinePlayer: MediaPlayer? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         receiveSharedText(intent)
         offlineEngine = OfflineKittenEngine(this)
+        odiaEngine = OfflineOdiaEngine(this)
 
         setContent {
             var screen by remember { mutableStateOf(AppScreen.STUDIO) }
@@ -71,6 +73,8 @@ class MainActivity : ComponentActivity() {
             var notice by remember { mutableStateOf("Ready") }
             var offlineInstalled by remember { mutableStateOf(offlineEngine.isInstalled()) }
             var installing by remember { mutableStateOf(false) }
+            var odiaInstalled by remember { mutableStateOf(odiaEngine.isInstalled()) }
+            var odiaInstalling by remember { mutableStateOf(false) }
             var speechSpeed by remember { mutableStateOf(prefs.getFloat("speech_speed", 1.0f)) }
             var outputVolume by remember { mutableStateOf(prefs.getFloat("output_volume", 1.0f)) }
             var offlineThreads by remember { mutableStateOf(prefs.getInt("offline_threads", 2).coerceIn(1, 4)) }
@@ -151,13 +155,20 @@ class MainActivity : ComponentActivity() {
                                     }
                                     Text("ENGINE", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        ModeButton("ONLINE AI", provider != "offline", Modifier.weight(1f)) { provider = "openai"; if (selectedVoice !in onlineVoices.map { it.voiceId }) selectedVoice = "coral" }
+                                        ModeButton("ONLINE AI", provider != "offline" && provider != "odia", Modifier.weight(1f)) { provider = "openai"; if (selectedVoice !in onlineVoices.map { it.voiceId }) selectedVoice = "coral" }
                                         ModeButton("OFFLINE AI", provider == "offline", Modifier.weight(1f)) { provider = "offline"; selectedVoice = offlineVoices.first().name }
+                                        ModeButton("ODIA OFFLINE", provider == "odia", Modifier.weight(1f)) { provider = "odia" }
                                     }
                                     Button(
                                         onClick = {
                                             if (input.isBlank()) notice = "Enter some text first."
-                                            else if (provider == "offline") {
+                                            else if (provider == "odia") {
+                                                if (!odiaInstalled) notice = "Download the Odia voice from the Offline screen first."
+                                                else {
+                                                    if (autoStop) stopPlayback()
+                                                    odiaEngine.speak(input, speechSpeed, outputVolume, offlineThreads) { s -> runOnUiThread { notice = s } }
+                                                }
+                                            } else if (provider == "offline") {
                                                 val voice = offlineVoices.firstOrNull { it.name == selectedVoice } ?: offlineVoices.first()
                                                 if (!offlineInstalled) notice = "Install the offline voice pack from Offline screen."
                                                 else {
@@ -179,7 +190,10 @@ class MainActivity : ComponentActivity() {
                                 }
 
                                 AppScreen.VOICES -> {
-                                    if (provider == "offline") {
+                                    if (provider == "odia") {
+                                        InfoCard("ODIA OFFLINE VOICE", "One fixed Odia voice (Meta MMS) with Sambalpuri-flavoured spelling of English words. It is not a Sambalpuri voice. Install it from the Offline screen.")
+                                        StatusCard(if (odiaInstalled) "Odia voice installed · offline ready" else "Odia voice not installed")
+                                    } else if (provider == "offline") {
                                         InfoCard("OFFLINE VOICES", "These voices run on your phone. Download the voice pack from Offline before testing.")
                                         offlineVoices.forEach { voice ->
                                             VoiceRow(voice.name, voice.style, selectedVoice == voice.name, "Preview") {
@@ -260,6 +274,36 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                     Text("Language note: these are English speaker IDs, not native Sambalpuri or Odia voices.", color = scheme.onSurfaceVariant, fontSize = 12.sp)
+                                    Text("ODIA VOICE (FREE, OFFLINE)", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                                    InfoCard("MMS ODIA · SAMBALPURI-FLAVOURED TEXT", "Sherpa-ONNX + Meta MMS Odia (~114 MB, non-commercial licence). English words are respelled in Odia script with Sambalpuri-style pronunciation rules. The voice itself is a standard Odia voice, not a Sambalpuri speaker.")
+                                    StatusCard(if (odiaInstalled) "Odia voice installed · offline ready" else "Odia voice not installed")
+                                    Button(
+                                        onClick = {
+                                            if (!odiaInstalling && !odiaInstalled) {
+                                                odiaInstalling = true
+                                                odiaEngine.install { s ->
+                                                    runOnUiThread {
+                                                        notice = s
+                                                        odiaInstalled = odiaEngine.isInstalled()
+                                                        if (odiaInstalled || s.startsWith("Odia voice install failed")) odiaInstalling = false
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        enabled = !odiaInstalling && !odiaInstalled,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) { Text(if (odiaInstalling) "DOWNLOADING ODIA VOICE…" else if (odiaInstalled) "ODIA VOICE INSTALLED" else "DOWNLOAD ODIA VOICE") }
+                                    OutlinedButton(
+                                        onClick = {
+                                            if (odiaInstalled) {
+                                                stopPlayback()
+                                                provider = "odia"
+                                                odiaEngine.speak("Hello doctor, my school is open. Thank you.", speechSpeed, outputVolume, offlineThreads) { s -> runOnUiThread { notice = s } }
+                                            } else notice = "Download the Odia voice first."
+                                        },
+                                        enabled = odiaInstalled,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) { Text("TEST ODIA VOICE") }
                                     StatusCard(notice)
                                 }
 
@@ -320,6 +364,7 @@ class MainActivity : ComponentActivity() {
         onlinePlayer?.let { runCatching { it.stop() }; runCatching { it.release() } }
         onlinePlayer = null
         if (::offlineEngine.isInitialized) offlineEngine.stop()
+        if (::odiaEngine.isInitialized) odiaEngine.stop()
     }
 
     private fun speakOnline(text: String, provider: String, voice: String, baseUrl: String, speed: Float = 1.0f, volume: Float = 1.0f, onStatus: (String) -> Unit) {
